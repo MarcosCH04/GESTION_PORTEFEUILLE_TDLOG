@@ -1,0 +1,42 @@
+h1 {
+    text-align: center;
+}
+
+p {
+    font-family : Arial, sans-serif;
+}
+
+.images {
+    text-align: center;
+    height : 250px;
+}
+
+.top {
+    opacity : 1;
+    transition:opacity 1s;
+    transform:translate(50%,0%);
+}
+
+.bottom {
+    opacity : 0;
+    transition:opacity 1s;
+    transform:translate(-50%,0%);
+}
+
+
+.buttons {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.buttons p {
+    color:blueviolet
+}
+
+button {
+    background-color: gray;
+}
+
+button:hover {
+    background-color: lightgray;
+}
