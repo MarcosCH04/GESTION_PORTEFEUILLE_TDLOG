@@ -1,5 +1,13 @@
-h1 {
+.head_box {
+    background : linear-gradient(to bottom, lightgreen, green);
+    padding : 10px;
+}
+
+.header{
     text-align: center;
+    font-family : 'Courier New', Courier, monospace;
+    font-size : 30px;
+    color : darkblue;
 }
 
 p {
