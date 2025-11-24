@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy
+pydantic
+pandas
+numpy
+yfinance
+python-jose[cryptography]
+python-multipart
