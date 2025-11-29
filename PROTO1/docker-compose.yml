@@ -13,7 +13,8 @@ services:
   frontend:
     build: ./frontend
     container_name: frontend
-    volumes:
-      - ./frontend/src:/app/src
     ports:
-      - "3000:3000"
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app      # 1. Mount the entire frontend folder
+      - /app/node_modules    # 2. Add an "anonymous volume" to ignore local node_modules
