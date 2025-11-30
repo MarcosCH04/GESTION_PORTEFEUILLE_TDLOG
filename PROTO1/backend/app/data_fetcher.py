@@ -9,7 +9,7 @@
 import yfinance as yf
 import pandas as pd
 from typing import List
-from .db import engine
+#from .db import engine
 
 
 def get_prices(
@@ -42,21 +42,9 @@ def get_prices(
         close = data[["Close"]]
         close.columns = [symbols[0]]
 
+    # On fait .dropna() pour enlever les dates sans données
     close = close.dropna()
 
-    # (Option pédagogique) : montrer comment on pourrait stocker en base SQLite
-    # Ici, on crée une table prices_raw, écrasée à chaque appel (demo simple).
-    try:
-        df_to_store = close.copy()
-        df_to_store.reset_index(inplace=True)
-        df_to_store.to_sql(
-            "prices_raw",
-            con=engine,
-            if_exists="replace",
-            index=False,
-        )
-    except Exception:
-        # Si problème d'écriture, on ignore (ce n'est pas bloquant pour le projet).
-        pass
+    # TODO: Stocker dans SQLite.
 
     return close
