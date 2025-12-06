@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy
+pydantic
+pandas
+numpy
+yfinance
+passlib
+argon2-cffi[with-bindings]

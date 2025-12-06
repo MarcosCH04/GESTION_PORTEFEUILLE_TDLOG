@@ -1,0 +1,12 @@
+Date du 23/11/2025:
+
+backend/app/auth.py : purement préparé pour plus tard, pas utilisé dans un 1er temps. Servira pour la création de comptes utilisateurs.
+Installer @vitejs/plugin-react avec:
+npm
+npm install @vitejs/plugin-react --save-dev
+
+ou yarn
+yarn add -D @vitejs/plugin-react
+
+ou pnpm
+pnpm add -D @vitejs/plugin-react
