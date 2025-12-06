@@ -5,5 +5,5 @@ pydantic
 pandas
 numpy
 yfinance
-python-jose[cryptography]
-python-multipart
+passlib
+argon2-cffi[with-bindings]
