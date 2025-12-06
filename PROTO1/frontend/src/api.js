@@ -1,5 +1,5 @@
 // Configuration for API calls
-const API_BASE_URL = 'http://backend:8000/api';
+const API_BASE_URL = 'http://localhost:8000/api';
 
 /**
  * Executes a POST request for authentication (register or login).

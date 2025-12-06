@@ -2,7 +2,7 @@
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, ForeignKey, UniqueConstraint, Date
 from datetime import datetime
 import os
 
@@ -10,7 +10,7 @@ import os
 
 # URL de la base SQLite.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = "/app/data/app.db" # The path *inside* the Docker container
+DB_PATH = "/app/data/app.db" # Using the Docker-persistent path
 SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 # create_engine pour SQLite (check_same_thread=False pour FastAPI)
@@ -40,27 +40,24 @@ def get_db():
 # --- SQLAlchemy Models ---
 
 # Global API Cache Table
-class AssetCache(Base):
-    __tablename__ = "asset_cache"
+class DailyPrice(Base):
+    __tablename__ = "daily_price"
 
     id = Column(Integer, primary_key=True, index=True)
+    
+    # Primary key components for granular caching
     ticker_symbol = Column(String, index=True, nullable=False)
-    start_date = Column(DateTime, nullable=False)
-    end_date = Column(DateTime, nullable=False)
-    
-    # Unique hash of (ticker_symbol, start_date, end_date) for fast lookups
-    query_hash = Column(String, unique=True, index=True, nullable=False) 
-    
-    # raw_data stores the serialized pandas DataFrame (prices)
-    raw_data = Column(JSON, nullable=False) 
+    date = Column(Date, index=True, nullable=False) # Use Date type for date-only indexing
 
-    # For cache eviction (the "not often used" policy)
-    last_accessed = Column(DateTime, default=datetime.utcnow, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
-    # Ensures the same query isn't stored twice (redundant check for the hash)
+    # The actual price data (Close, High, Volume, etc.) for that day
+    price_data = Column(JSON, nullable=False) 
+
+    # Timestamp for future cache freshness checks
+    last_updated = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Composite unique key ensures one price record per ticker per day
     __table_args__ = (
-        UniqueConstraint('ticker_symbol', 'start_date', 'end_date', name='uq_cache_query'),
+        UniqueConstraint('ticker_symbol', 'date', name='uq_daily_price'),
     )
 
 

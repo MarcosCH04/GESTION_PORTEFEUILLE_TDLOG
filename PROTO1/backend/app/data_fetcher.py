@@ -2,25 +2,16 @@
 
 import yfinance as yf
 import pandas as pd
-import json
-import hashlib
 from typing import List
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
-from .db import SessionLocal, Base # Assumes Base is imported and defined in db.py
-from .db import AssetCache # Import the model from db.py
+from sqlalchemy import func
+from .db import SessionLocal, DailyPrice 
 
-def generate_query_hash(symbols: List[str], start_date: str, end_date: str) -> str:
-    """
-    Generates a unique SHA-256 hash for a yfinance query based on parameters.
-    """
-    # Important: Normalize the input for consistent hashing. 
-    # Sort symbols alphabetically and use ISO date format.
-    symbols_str = ",".join(sorted([s.upper() for s in symbols]))
-    query_string = f"{symbols_str}|{start_date}|{end_date}"
-    
-    return hashlib.sha256(query_string.encode('utf-8')).hexdigest()
-
+# Utility to convert string dates to datetime objects (used internally)
+def _parse_date(date_str: str) -> date:
+    # Assumes input format 'YYYY-MM-DD'
+    return datetime.strptime(date_str, '%Y-%m-%d').date()
 
 def get_prices(
     symbols: List[str],
@@ -28,92 +19,140 @@ def get_prices(
     end_date: str,
 ) -> pd.DataFrame:
     """
-    Récupère les prix de clôture ajustés pour une liste de symboles,
-    en vérifiant d'abord dans le cache (AssetCache).
+    Retrieves prices from the database, filling any date gaps with data from yfinance.
     """
     if not symbols:
         return pd.DataFrame()
+
+    start_dt = _parse_date(start_date)
+    end_dt = _parse_date(end_date)
     
-    # --- 1. Générer le Hash et Vérifier le Cache ---
-    query_hash = generate_query_hash(symbols, start_date, end_date)
+    # Generate the full list of required dates between start_dt and end_dt (inclusive)
+    required_dates = pd.to_datetime(pd.date_range(start_dt, end_dt, freq='D').date).normalize()
     
-    db: Session = SessionLocal() # Get a new DB session
+    db: Session = SessionLocal()
     
     try:
-        cached_entry = db.query(AssetCache).filter(
-            AssetCache.query_hash == query_hash
-        ).first()
+        # --- 1. Check Cache for Existing Data ---
+        # Query the database for all available data within the required range
+        cached_data = db.query(DailyPrice)\
+            .filter(DailyPrice.ticker_symbol.in_(symbols))\
+            .filter(DailyPrice.date >= start_dt)\
+            .filter(DailyPrice.date <= end_dt)\
+            .all()
 
-        if cached_entry:
-            # Cache Hit! Update last_accessed and return data.
-            cached_entry.last_accessed = datetime.utcnow()
-            db.commit()
+        # Build a set of (ticker, date) tuples for quick lookup
+        cached_keys = set((d.ticker_symbol, d.date) for d in cached_data)
+
+        # --- 2. Determine Missing Keys (Gap Analysis) ---
+        
+        missing_keys = []
+        for symbol in symbols:
+            for dt in required_dates.date:
+                if (symbol, dt) not in cached_keys:
+                    missing_keys.append((symbol, dt))
+        
+        # Determine the earliest and latest date we need to fetch externally
+        if missing_keys:
+            missing_symbols = sorted(list(set(k[0] for k in missing_keys)))
+            fetch_start = min(k[1] for k in missing_keys)
+            fetch_end = max(k[1] for k in missing_keys)
             
-            # Reconstruct DataFrame from JSON
-            data_dict = cached_entry.raw_data
-            prices = pd.DataFrame(data_dict).rename_axis('Date')
-            prices.columns.name = None
+            print(f"Cache Miss. Missing data for {len(missing_keys)} days between {fetch_start} and {fetch_end}. Fetching...")
+        else:
+            print("Cache Hit! All data is present in the database.")
+            # If nothing is missing, skip the fetch and jump straight to assembly.
+            fetch_start = fetch_end = None
+            missing_symbols = []
+
+        # --- 3. External Fetch (Only if Gaps Exist) ---
+        new_records = []
+        if fetch_start and missing_symbols:
+            # We fetch one day past the end date, as yfinance uses exclusive end dates
+            yf_end_date = fetch_end + timedelta(days=1)
             
-            # The 'Date' index is stored as string keys, so we convert them back to datetime objects
-            prices.index = pd.to_datetime(prices.index)
+            # Fetch data from Yahoo Finance
+            yf_data = yf.download(
+                tickers=missing_symbols,
+                start=fetch_start,
+                end=yf_end_date,
+                auto_adjust=True,
+                progress=False,
+            )
             
-            print(f"Cache Hit for {', '.join(symbols)}!")
-            return prices
+            # --- 4. Process and Save New Data ---
+            
+            # Use 'Close' price for the calculation, or customize this if calc.py needs other columns
+            close_prices = yf_data.get("Close", yf_data.get("Adj Close")) 
+
+            if close_prices is None:
+                # Handle single asset case where the column name might be the symbol
+                if len(missing_symbols) == 1 and missing_symbols[0] in yf_data.columns.names:
+                     close_prices = yf_data[missing_symbols[0]].get("Close")
+
+            if close_prices is not None:
+                prices_df = close_prices.dropna(how='all')
+                
+                for dt, row in prices_df.iterrows():
+                    current_date = dt.normalize().date()
+                    
+                    for symbol in missing_symbols:
+                        # Ensure the key we are looking for was actually a missing date
+                        if (symbol, current_date) in missing_keys:
+                            
+                            # Extract relevant data for JSON storage
+                            # Only store the date if it's within the requested range and price is valid
+                            price = row.get(symbol)
+                            if pd.notna(price):
+                                # Save the closing price and maybe volume/high/low if needed later
+                                data_to_store = {"Close": float(price)} 
+                                
+                                new_record = DailyPrice(
+                                    ticker_symbol=symbol,
+                                    date=current_date,
+                                    price_data=data_to_store,
+                                    last_updated=datetime.utcnow()
+                                )
+                                new_records.append(new_record)
+
+                if new_records:
+                    db.add_all(new_records)
+                    db.commit()
+                    print(f"Successfully saved {len(new_records)} new daily records.")
+            
+        # --- 5. Assemble Final DataFrame (Re-query all data, including new and old) ---
+        
+        # Fetch ALL required data from the database again
+        final_data = db.query(DailyPrice)\
+            .filter(DailyPrice.ticker_symbol.in_(symbols))\
+            .filter(DailyPrice.date >= start_dt)\
+            .filter(DailyPrice.date <= end_dt)\
+            .order_by(DailyPrice.date)\
+            .all()
+
+        # Convert final_data list to a pandas DataFrame
+        records = []
+        for dp in final_data:
+            records.append({
+                'Date': dp.date,
+                'Symbol': dp.ticker_symbol,
+                'Close': dp.price_data.get('Close') # Extract the key data point
+            })
+        
+        result_df = pd.DataFrame(records)
+        if result_df.empty:
+             return pd.DataFrame()
+
+        # Pivot to desired output format: index=Date, columns=Symbol
+        prices = result_df.pivot(index='Date', columns='Symbol', values='Close')
+        
+        return prices.dropna(how='all')
 
     except Exception as e:
-        print(f"Cache lookup failed: {e}")
-        db.rollback() # Don't let DB errors block fetching from yfinance
+        print(f"Data fetching error: {e}")
+        db.rollback()
+        # Fallback: Consider fetching from yfinance directly here if the database operation fails critically
+        # For now, return an empty DataFrame or re-raise the error.
+        return pd.DataFrame()
     finally:
         db.close()
-
-    # --- 2. Cache Miss: Fetch from yfinance ---
-    print(f"Cache Miss for {', '.join(symbols)}. Fetching...")
-    data = yf.download(
-        tickers=symbols,
-        start=start_date,
-        end=end_date,
-        auto_adjust=True,
-        progress=False,
-    )
-
-    # ... (Rest of your existing yfinance processing logic)
-    if isinstance(data.columns, pd.MultiIndex):
-        close = data["Close"]
-    else:
-        close = data[["Close"]]
-        close.columns = [symbols[0]]
-
-    prices = close.dropna()
-    
-    # --- 3. Storing the Result in Cache ---
-    if not prices.empty:
-        # Prepare data for JSON storage: DataFrame to dictionary {date_str: {symbol: price}}
-        # The key is the 'Date' and the values are the rows (symbols and prices)
-        # Using to_dict('index') is a common way to serialize time-series data
-        data_to_cache = prices.to_dict(orient='index')
-        # Convert date objects in the index to string keys for JSON compatibility
-        data_to_cache = {str(k.date()): v for k, v in data_to_cache.items()}
-        
-        new_cache_entry = AssetCache(
-            ticker_symbol=",".join(sorted(symbols)), # Store all symbols for debug/traceability
-            start_date=datetime.strptime(start_date, '%Y-%m-%d'),
-            end_date=datetime.strptime(end_date, '%Y-%m-%d'),
-            query_hash=query_hash,
-            raw_data=data_to_cache, # Store the prepared JSON data
-            last_accessed=datetime.utcnow(),
-        )
-        
-        # Save to DB
-        db_save: Session = SessionLocal()
-        try:
-            db_save.add(new_cache_entry)
-            db_save.commit()
-            print("Successfully cached data.")
-        except Exception as e:
-            # This handles the case where two requests try to save the same hash simultaneously
-            print(f"Error saving to cache (might be duplicate): {e}")
-            db_save.rollback()
-        finally:
-            db_save.close()
-
-    return prices

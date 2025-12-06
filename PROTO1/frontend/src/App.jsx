@@ -1,26 +1,36 @@
-// frontend/src/App.jsx
-
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-// --- New Imports for Authentication ---
+
+// --- Authentication Components & Utility ---
 import LoginForm from "./components/LoginForm"; 
 import RegistrationForm from "./components/RegistrationForm";
-import { authRequest } from "./api"; // Utility function for auth calls
-// --- End New Imports ---
-
+import { authRequest } from "./api"; 
+// --- Main App Components ---
+import HomePage from "./components/HomePage"; 
 import AssetSelector from "./components/AssetSelector";
 import PeriodSelector from "./components/PeriodSelector";
 import StrategyForm from "./components/StrategyForm";
 import PortfolioTable from "./components/PortfolioTable";
 import Charts from "./components/Charts";
 
-// VITE_API_URL should be set to http://backend:8000 (Docker service name)
+// VITE_API_URL should be set to http://backend:8000/api
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
+// Configure Axios globally to send cookies with all requests
+axios.defaults.withCredentials = true;
+
+const VIEW_STATES = {
+    HOME: 'home',
+    LOGIN: 'login',
+    REGISTER: 'register',
+    MAIN_APP: 'main_app', 
+};
+
+
 function App() {
-    // --- AUTHENTICATION STATE ---
+    // --- ROUTING & AUTH STATE ---
+    const [currentView, setCurrentView] = useState(VIEW_STATES.HOME); 
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [showRegistration, setShowRegistration] = useState(false);
     // ----------------------------
 
     const [assets, setAssets] = useState([]);
@@ -40,64 +50,37 @@ function App() {
     const [assetPrices, setAssetPrices] = useState(null); 
     const [metrics, setMetrics] = useState(null); 
     const [portfolio, setPortfolio] = useState(null); 
-
     const [error, setError] = useState("");
 
-    // --- NEW: Function to check for active session (e.g., on reload) ---
-    // This is a simple, stateless check. If a protected endpoint responds 200, we are logged in.
-    const checkSession = async () => {
-        try {
-            // Use a lightweight protected endpoint (or a new /api/me if you create one)
-            // If the user has a valid cookie, this call should succeed.
-            await axios.get(`${API_BASE_URL}/assets`, { withCredentials: true });
-            setIsAuthenticated(true);
-        } catch (err) {
-            // 401 Unauthorized, 403 Forbidden, or network error
-            setIsAuthenticated(false);
-        }
+    // --- Authentication & View Handlers ---
+
+    const handleLoginSuccess = () => {
+        setIsAuthenticated(true);
+        setCurrentView(VIEW_STATES.MAIN_APP); // Go to the main app on success
     };
 
-    // --- NEW: Logout Function ---
+    const handleRegisterSuccess = () => {
+        setCurrentView(VIEW_STATES.LOGIN); // Go to login after successful registration
+    };
+
     const handleLogout = async () => {
         try {
-            // Call the backend endpoint to clear the session and delete the cookie
-            await axios.post(`${API_BASE_URL}/logout`, {}, { withCredentials: true });
+            // 1. Clear server session/cookie
+            await axios.post(`${API_BASE_URL}/logout`, {});
         } catch (err) {
-            // Log the error but proceed with frontend state cleanup anyway
-            console.error("Logout failed on server side:", err);
+            console.error("Logout failed on server side, proceeding with frontend state cleanup:", err);
         } finally {
+            // 2. Clear sensitive data and reset view state
             setIsAuthenticated(false);
-            // Optionally clear all sensitive state here
+            setCurrentView(VIEW_STATES.HOME); 
             setAssetPrices(null);
             setMetrics(null);
             setPortfolio(null);
+            setError("");
         }
     };
-    // -----------------------------
 
-
-    // Récupération de la liste des actifs au chargement
-    useEffect(() => {
-        // If the user *might* be authenticated (i.e., they have a cookie), check the session
-        checkSession();
-        
-        // --- Original Asset Fetch Logic (moved inside a function for clarity) ---
-        const fetchAssets = () => {
-            axios.get(`${API_BASE_URL}/assets`)
-                .then((res) => {
-                    setAssets(res.data.assets);
-                })
-                .catch((err) => {
-                    console.error(err);
-                    setError("Impossible de récupérer la liste des actifs.");
-                });
-        };
-        fetchAssets(); // Always fetch assets as they are publicly visible
-    }, []);
-    
-    // --- MODIFIED loadAssetData and runBacktest to require credentials ---
-    // axios must be configured to send the session cookie on every request
-    const axiosConfig = { withCredentials: true };
+    // --- API Call Functions ---
 
     async function loadAssetData() {
         setError("");
@@ -112,8 +95,7 @@ function App() {
                 start_date: period.start,
                 end_date: period.end,
             };
-            // Note: /analyze is generally public, but we add config just in case it becomes protected.
-            const res = await axios.post(`${API_BASE_URL}/analyze`, payload, axiosConfig);
+            const res = await axios.post(`${API_BASE_URL}/analyze`, payload);
             setAssetPrices(res.data.prices);
             setMetrics(res.data.metrics);
         } catch (e) {
@@ -147,99 +129,115 @@ function App() {
                 strat_start: strategy.stratStart,
                 strat_end: strategy.stratEnd,
             };
-            // CRUCIAL: Must include axiosConfig to send the session cookie!
-            const res = await axios.post(`${API_BASE_URL}/backtest`, payload, axiosConfig);
+            // This endpoint requires the session cookie
+            const res = await axios.post(`${API_BASE_URL}/backtest`, payload);
             setPortfolio(res.data.portfolio);
             setMetrics(res.data.metrics); 
         } catch (e) {
             console.error(e);
-            // Check for 401/403 errors indicating session expiration
+            // Crucial: Handle session expiration (401 from protected route)
             if (e.response && e.response.status === 401) {
                 setError("Session expirée. Veuillez vous reconnecter.");
                 setIsAuthenticated(false);
+                setCurrentView(VIEW_STATES.LOGIN); // Redirect to login
             } else {
                 setError("Erreur lors du backtest.");
             }
         }
     }
     
-    // --- 1. RENDERING THE AUTHENTICATION VIEW ---
-    if (!isAuthenticated) {
+    // --- Data Loading Effect ---
+    // Fetch assets on mount, regardless of login status (as they are public)
+    useEffect(() => {
+        axios.get(`${API_BASE_URL}/assets`)
+            .then((res) => setAssets(res.data.assets))
+            .catch((err) => {
+                console.error(err);
+                setError("Impossible de récupérer la liste des actifs.");
+            });
+    }, []);
+
+    
+    // --- RENDER ROUTER ---
+    
+    // 1. Render Main App if authenticated
+    if (isAuthenticated && currentView === VIEW_STATES.MAIN_APP) {
         return (
-            <div className="auth-page">
-                <h1>Investment Backtester (prototype)</h1>
-                {showRegistration ? (
-                    <>
-                        {/* The RegistrationForm redirects to login on success */}
-                        <RegistrationForm onSuccessfulRegister={() => setShowRegistration(false)} />
-                        <p>
-                            Already registered? <button onClick={() => setShowRegistration(false)}>Login here</button>
-                        </p>
-                    </>
-                ) : (
-                    <>
-                        {/* The LoginForm sets isAuthenticated to true on success */}
-                        <LoginForm onSuccessfulLogin={() => setIsAuthenticated(true)} />
-                        <p>
-                            Don't have an account? <button onClick={() => setShowRegistration(true)}>Register now</button>
-                        </p>
-                    </>
-                )}
+            <div className="app-container">
+                <header className="app-header">
+                    <h1>Investment Backtester (prototype)</h1>
+                    <button onClick={handleLogout}>Déconnexion</button>
+                </header>
+
+                {error && <p style={{ color: "red" }}>{error}</p>}
+
+                {/* Main components and logic moved here */}
+                <AssetSelector
+                    assets={assets}
+                    selected={selected}
+                    setSelected={setSelected}
+                    weights={weights}
+                    setWeights={setWeights}
+                />
+
+                <PeriodSelector period={period} setPeriod={setPeriod} />
+
+                <div className="section">
+                    <button onClick={loadAssetData}>Charger les données des actifs</button>
+                </div>
+
+                <Charts assetPrices={assetPrices} portfolio={portfolio} />
+                <PortfolioTable selectedAssets={selected} metrics={metrics} />
+
+                <div className="section">
+                    <h2>Montant total à investir</h2>
+                    <input
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(Number(e.target.value))}
+                    />
+                </div>
+
+                <StrategyForm strategy={strategy} setStrategy={setStrategy} />
+
+                <div className="section">
+                    <button onClick={runBacktest}>Lancer le backtest de portefeuille</button>
+                </div>
             </div>
         );
     }
-    
-    // --- 2. RENDERING THE MAIN APPLICATION VIEW (IF AUTHENTICATED) ---
-    return (
-        <div className="app-container">
-            <header className="app-header">
-                <h1>Investment Backtester (prototype)</h1>
-                <button onClick={handleLogout}>Déconnexion</button> {/* Logout Button */}
-            </header>
 
-            {error && <p style={{ color: "red" }}>{error}</p>}
-
-            {/* All your existing components and logic go here */}
-            {/* 1. Liste d'actifs + cases à cocher */}
-            <AssetSelector
-                assets={assets}
-                selected={selected}
-                setSelected={setSelected}
-                weights={weights}
-                setWeights={setWeights}
-            />
-
-            {/* 2. Période pour les courbes + métriques */}
-            <PeriodSelector period={period} setPeriod={setPeriod} />
-
-            {/* bouton pour charger les courbes & métriques */}
-            <div className="section">
-                <button onClick={loadAssetData}>Charger les données des actifs</button>
-            </div>
-
-            {/* 3. Graphe des actifs + 4. Tableau des métriques */}
-            <Charts assetPrices={assetPrices} portfolio={portfolio} />
-            <PortfolioTable selectedAssets={selected} metrics={metrics} />
-
-            {/* 5. Montant à investir */}
-            <div className="section">
-                <h2>Montant total à investir</h2>
-                <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(Number(e.target.value))}
+    // 2. Render Auth Views based on state
+    switch (currentView) {
+        case VIEW_STATES.LOGIN:
+            return (
+                <div className="auth-page">
+                    <LoginForm onSuccessfulLogin={handleLoginSuccess} />
+                    <p>
+                        Need an account? <button onClick={() => setCurrentView(VIEW_STATES.REGISTER)}>Register now</button>
+                    </p>
+                    <p><button onClick={() => setCurrentView(VIEW_STATES.HOME)}>Back to Home</button></p>
+                </div>
+            );
+        case VIEW_STATES.REGISTER:
+            return (
+                <div className="auth-page">
+                    <RegistrationForm onSuccessfulRegister={handleRegisterSuccess} />
+                    <p>
+                        Already registered? <button onClick={() => setCurrentView(VIEW_STATES.LOGIN)}>Login here</button>
+                    </p>
+                    <p><button onClick={() => setCurrentView(VIEW_STATES.HOME)}>Back to Home</button></p>
+                </div>
+            );
+        case VIEW_STATES.HOME:
+        default:
+            return (
+                <HomePage 
+                    setShowLogin={() => setCurrentView(VIEW_STATES.LOGIN)}
+                    setShowRegistration={() => setCurrentView(VIEW_STATES.REGISTER)}
                 />
-            </div>
-
-            {/* 6-7-8. Répartition + stratégie + période d'investissement */}
-            <StrategyForm strategy={strategy} setStrategy={setStrategy} />
-
-            {/* 9. Bouton pour lancer la stratégie et afficher le graphe portefeuille */}
-            <div className="section">
-                <button onClick={runBacktest}>Lancer le backtest de portefeuille</button>
-            </div>
-        </div>
-    );
+            );
+    }
 }
 
 export default App;

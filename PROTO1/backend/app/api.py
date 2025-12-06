@@ -75,7 +75,7 @@ def analyze_assets(req: AnalyzeRequest):
     # conversion DataFrame -> dict {date: {symbol: price}}
     prices_dict: Dict[str, Dict[str, float]] = {}
     for dt, row in prices.iterrows():
-        prices_dict[str(dt.date())] = {str(col): float(row[col]) for col in prices.columns}
+        prices_dict[str(dt)] = {str(col): float(row[col]) for col in prices.columns}
 
     return AnalyzeResponse(prices=prices_dict, metrics=metrics)
 

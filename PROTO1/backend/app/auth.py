@@ -61,8 +61,8 @@ def create_user_session(db: Session, user: User, last_case: Optional[UserCaseBas
     session_token = secrets.token_urlsafe(32) 
     
     # Use default/empty values if no case is provided
-    params = last_case.last_parameters.model_dump_json() if last_case else "{}"
-    results = last_case.calculated_results.model_dump_json() if last_case and last_case.calculated_results else None
+    params = last_case.last_parameters if last_case else "{}"
+    results = last_case.calculated_results if last_case else None
     
     db_session = UserCase(
         user_id=user.id,
