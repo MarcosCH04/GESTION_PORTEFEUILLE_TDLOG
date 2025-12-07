@@ -17,10 +17,11 @@ def get_prices(
     symbols: List[str],
     start_date: str,
     end_date: str,
+    db: Session = None,
 ) -> pd.DataFrame:
     """
     Retrieves prices from the database (DailyPrice table), filling any date gaps 
-    with data fetched from yfinance.
+    with data fetched from yfinance. We add Session for testing.
     """
     if not symbols:
         return pd.DataFrame()
@@ -31,8 +32,12 @@ def get_prices(
     # Generate the full list of required dates
     required_dates = pd.to_datetime(pd.date_range(start_dt, end_dt, freq='D').date).normalize()
     
-    db: Session = SessionLocal()
-    
+    if db is None:
+        db = SessionLocal() # Use production session outside of tests
+        close_db = True
+    else:
+        close_db = False # Use the test session, do not close it
+
     try:
         # 1. Query DB for existing data in the range
         cached_data = db.query(DailyPrice)\
@@ -118,6 +123,10 @@ def get_prices(
 
         # Pivot to desired output format: index=Date, columns=Symbol
         prices = result_df.pivot(index='Date', columns='Symbol', values='Close')
+        
+        # Close DB session unless we are testing.
+        if close_db:
+             db.close()
         
         return prices.dropna(how='all')
 

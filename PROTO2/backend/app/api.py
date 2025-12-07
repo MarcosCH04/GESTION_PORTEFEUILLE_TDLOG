@@ -1,12 +1,15 @@
 # backend/app/api.py
 
 from fastapi import APIRouter, HTTPException, Depends, Response, status
-from typing import Dict
+from typing import Dict, List
 import json
+import pandas as pd
 import os
 from sqlalchemy.orm import Session
+from datetime import datetime
 
-from . import data_fetcher, calc # Assuming calc.py has compute_metrics and run_backtest
+# Assuming calc.py has compute_metrics and run_backtest
+from . import data_fetcher, calc 
 from .schemas import (
     AnalyzeRequest, AnalyzeResponse,
     BacktestRequest, BacktestResponse,
@@ -30,6 +33,17 @@ def _load_assets_from_json():
     with open(assets_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+# --- Utility for Robust JSON Serialization (Replacing NaN/Inf) ---
+def clean_metrics_for_json(data: Dict) -> Dict:
+    """Recursively replaces float('nan') and float('inf') with 0.0."""
+    for k, v in data.items():
+        if isinstance(v, dict):
+            clean_metrics_for_json(v)
+        # Check for Infinity or NaN using pd.isna for robustness
+        elif v is not None and (v == float('inf') or v == float('-inf') or pd.isna(v)): 
+            data[k] = 0.0 # Replaced with 0.0 as requested
+    return data
+
 
 # --- 1. Public Endpoints ---
 
@@ -51,11 +65,13 @@ def analyze_assets(req: AnalyzeRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Impossible de récupérer les prix.")
 
     metrics = calc.compute_metrics(prices)
+    
+    # Clean metrics immediately after calculation
+    metrics = clean_metrics_for_json(metrics)
 
     # Convert DataFrame (index=Date objects) -> dict {date_str: {symbol: price}}
     prices_dict: Dict[str, Dict[str, float]] = {}
     for dt, row in prices.iterrows():
-        # dt is already a date object or Timestamp; use str(dt) directly
         prices_dict[str(dt)] = {str(col): float(row[col]) for col in prices.columns}
 
     return AnalyzeResponse(prices=prices_dict, metrics=metrics)
@@ -126,26 +142,41 @@ def run_backtest_protected(
     db: Session = Depends(get_db),
 ):
     """Executes backtest, requiring authentication, and saves parameters/results."""
+    # Redundant check, but safe to keep for basic API protection
     if len(req.assets) != len(req.weights):
         raise HTTPException(status_code=400, detail="Asset count mismatch with weights.")
 
     try:
+        # Assumes calc.run_backtest performs weight validation and returns structured metrics
         portfolio_series, metrics = calc.run_backtest(req)
     except ValueError as e:
+        # This catches the weight validation error raised in calc.py
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Clean infinite or NaN values in portfolio_series before serialization.
+    if portfolio_series is not None and not portfolio_series.empty:
+        portfolio_series = portfolio_series.replace([float('inf'), float('-inf'), float('nan')], 0.0)
+
+    # Clean the metrics dictionary (solves the ValueError crash)
+    if metrics is not None:
+        metrics = clean_metrics_for_json(metrics)
+
+    # Serialize portfolio series
     portfolio_dict = {str(d.date()): float(v) for d, v in portfolio_series.items()}
 
     # --- SAVE to UserCase (Persistence/History) ---
     try:
         # Serialize Pydantic models for database storage (JSON column)
         params_json = req.model_dump_json(exclude_unset=True) 
-        results_model = CaseResults(portfolio=portfolio_dict, metrics=metrics)
+        
+        # Ensure metrics is not None when creating CaseResults model
+        results_model = CaseResults(portfolio=portfolio_dict, metrics=metrics or {}) 
         results_json = results_model.model_dump_json(exclude_unset=True)
 
         # Update the active session's parameters and results
         current_session.last_parameters = params_json
         current_session.calculated_results = results_json
+        current_session.last_activity_time = datetime.utcnow() # Update session activity time
         db.commit()
     except Exception as e:
         print(f"Error saving session data: {e}")

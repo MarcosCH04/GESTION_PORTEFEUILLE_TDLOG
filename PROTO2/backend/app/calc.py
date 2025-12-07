@@ -81,6 +81,7 @@ def _build_portfolio_series_from_cagr(
     - buy_and_hold : on investit tout au début.
     - dca         : on investit une somme fixe au début de chaque mois.
     """
+
     weights = np.array(weights, dtype=float)
     weights = weights / weights.sum()  # normalisation
 
@@ -154,6 +155,16 @@ def run_backtest(req: BacktestRequest):
     3. Construit un portefeuille synthétique sur [strat_start, strat_end]
        en utilisant les CAGR uniquement.
     """
+
+    # Some basic validations.
+    TOLERANCE = 1e-6 # Point-float tolerance for weight sum check.
+    if not np.isclose(sum(req.weights), 1.0, atol=TOLERANCE):
+        raise ValueError("La somme des poids doit être égale à 1.")
+ 
+    if len(req.assets) != len(req.weights):
+        raise ValueError("Le nombre d'actifs ne correspond pas au nombre de poids.")
+    
+
     # 1. Prix pour le calcul des métriques
     prices = data_fetcher.get_prices(
         req.assets,
@@ -162,7 +173,21 @@ def run_backtest(req: BacktestRequest):
     )
     if prices.empty:
         raise ValueError("Pas de données de prix pour les actifs demandés.")
-
+    
+    # If the calculation requires at least two data points (start and end), check for that.
+    if prices.empty or len(prices) < 2:
+        
+        # Define the REQUIRED nested structure with default safe values
+        safe_metrics = {
+            "portfolio": {
+                "cagr": 0.0,
+                "vol": 0.0,
+                "max_drawdown": 0.0
+            }
+        }
+        # Return an empty portfolio series and the structured metrics
+        return pd.Series(), safe_metrics
+    
     # 2. Métriques
     metrics = compute_metrics(prices)
 
@@ -180,5 +205,6 @@ def run_backtest(req: BacktestRequest):
         weights=req.weights,
         strategy=req.strategy,
     )
-
+    
+    
     return portfolio_series, metrics

@@ -7,3 +7,5 @@ numpy
 yfinance
 passlib
 argon2-cffi[with-bindings]
+pytest
+httpx
