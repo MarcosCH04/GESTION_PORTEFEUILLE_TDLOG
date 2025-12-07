@@ -1,5 +1,6 @@
-Implement tests
-Implement Favourites
+Implement Favourites (already have CaseParameters to start stocking them)
+Implement to dos with ##
+Add message in case of saving error /backend/app/api.py
 
 Decide on language of comments and implement it.
 Frontend revision: consider Tailwind or Bootstrap for css, comment readable code.

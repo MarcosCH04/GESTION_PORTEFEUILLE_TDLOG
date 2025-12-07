@@ -15,7 +15,7 @@ from .schemas import UserCreate, CaseParameters, CaseResults
 
 # --- 1. Utilities and Setup ---
 
-# Argon2 is the industry standard hashing scheme
+# Argon2 is an industry standard hashing scheme
 pwd_context = CryptContext(
     schemes=["argon2"], 
     deprecated="auto"
@@ -33,7 +33,7 @@ def create_db_and_tables():
     """Initializes the database structure on startup."""
     Base.metadata.create_all(bind=engine)
 
-SESSION_EXPIRATION_MINUTES = 1 
+SESSION_EXPIRATION_MINUTES = 30
 
 
 # --- 2. User CRUD and Session Management ---

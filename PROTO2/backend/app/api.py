@@ -28,28 +28,19 @@ def _load_assets_from_json():
     """Reads the list of available assets from assets.json."""
     here = os.path.dirname(os.path.abspath(__file__))
     assets_path = os.path.join(here, "assets.json")
+
+    # Fallback to default list if file not found.
+    ## Maybe change to raise an error later.
     if not os.path.exists(assets_path):
         return ["AAPL", "MSFT", "SPY", "BTC-USD"]
     with open(assets_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-# --- Utility for Robust JSON Serialization (Replacing NaN/Inf) ---
-def clean_metrics_for_json(data: Dict) -> Dict:
-    """Recursively replaces float('nan') and float('inf') with 0.0."""
-    for k, v in data.items():
-        if isinstance(v, dict):
-            clean_metrics_for_json(v)
-        # Check for Infinity or NaN using pd.isna for robustness
-        elif v is not None and (v == float('inf') or v == float('-inf') or pd.isna(v)): 
-            data[k] = 0.0 # Replaced with 0.0 as requested
-    return data
-
-
 # --- 1. Public Endpoints ---
 
 @router.get("/assets")
 def list_assets() -> Dict[str, list]:
-    """Returns the list of available assets/tickers."""
+    """Returns the list of available assets/tickers. Used in frontend dropdowns."""
     return {"assets": _load_assets_from_json()}
 
 
@@ -62,17 +53,15 @@ def analyze_assets(req: AnalyzeRequest, db: Session = Depends(get_db)):
         end_date=str(req.end_date),
     )
     if prices.empty:
-        raise HTTPException(status_code=400, detail="Impossible de récupérer les prix.")
-
-    metrics = calc.compute_metrics(prices)
-    
-    # Clean metrics immediately after calculation
-    metrics = clean_metrics_for_json(metrics)
+        raise HTTPException(status_code=400, detail="No prices available.")
 
     # Convert DataFrame (index=Date objects) -> dict {date_str: {symbol: price}}
     prices_dict: Dict[str, Dict[str, float]] = {}
     for dt, row in prices.iterrows():
         prices_dict[str(dt)] = {str(col): float(row[col]) for col in prices.columns}
+
+    # Calculate metrics
+    metrics = calc.compute_metrics(prices)
 
     return AnalyzeResponse(prices=prices_dict, metrics=metrics)
 
@@ -153,14 +142,6 @@ def run_backtest_protected(
         # This catches the weight validation error raised in calc.py
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Clean infinite or NaN values in portfolio_series before serialization.
-    if portfolio_series is not None and not portfolio_series.empty:
-        portfolio_series = portfolio_series.replace([float('inf'), float('-inf'), float('nan')], 0.0)
-
-    # Clean the metrics dictionary (solves the ValueError crash)
-    if metrics is not None:
-        metrics = clean_metrics_for_json(metrics)
-
     # Serialize portfolio series
     portfolio_dict = {str(d.date()): float(v) for d, v in portfolio_series.items()}
 
@@ -179,6 +160,7 @@ def run_backtest_protected(
         current_session.last_activity_time = datetime.utcnow() # Update session activity time
         db.commit()
     except Exception as e:
+        # This error will be logged for the administrator, not the user.
         print(f"Error saving session data: {e}")
         db.rollback()
 
