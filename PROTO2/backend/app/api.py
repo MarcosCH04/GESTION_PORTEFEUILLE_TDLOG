@@ -165,3 +165,26 @@ def save_current_strategy(
 @router.get("/strategies", response_model=List[UserStrategySchema])
 def get_all_my_strategies(current_user: User = Depends(get_current_user)):
     return current_user.strategies
+
+@router.delete("/strategies/{strategy_id}")
+def delete_strategy(
+    strategy_id: int, 
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    """Deletes a specific strategy owned by the current user."""
+    # We filter by both ID and user_id to prevent users from deleting each other's data
+    strat = db.query(UserStrategy).filter(
+        UserStrategy.id == strategy_id, 
+        UserStrategy.user_id == current_user.id
+    ).first()
+    
+    if not strat:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Strategy not found or you don't have permission to delete it."
+        )
+        
+    db.delete(strat)
+    db.commit()
+    return {"message": "Strategy deleted successfully"}

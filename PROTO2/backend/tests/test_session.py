@@ -88,3 +88,32 @@ def test_strategy_manual_save_limit(client, db_session: Session):
     # 5. Logout and check session cleanup
     auth_client.post("/api/logout")
     assert db_session.query(SessionModel).count() == 0
+
+def test_delete_strategy_ownership(client, db_session: Session):
+    """Verifies that users can only delete their own strategies."""
+    # 1. Setup User A and create a strategy
+    auth_client_a = authenticated_client(client)
+    auth_client_a.post("/api/backtest", json=PAYLOAD_DATA) # Creates strategy ID 1
+    
+    # 2. Setup User B (different account)
+    # We manually register a second user for this test
+    user_b_data = {"username": "user_b", "password": "Password123"}
+    client.post("/api/register", json=user_b_data)
+    login_res = client.post("/api/login", json=user_b_data)
+    token_b = login_res.cookies["session_token"]
+    
+    # 3. User B tries to delete User A's strategy (ID 1)
+    client.cookies.set("session_token", token_b)
+    delete_res = client.delete("/api/strategies/1")
+    
+    # Assert: Should fail with 404
+    assert delete_res.status_code == 404
+    
+    # 4. User A deletes their own strategy
+    token_a = db_session.query(User).filter_by(username="testuser").first().sessions[0].session_token
+    client.cookies.set("session_token", token_a)
+    delete_success = client.delete("/api/strategies/1")
+    
+    # Assert: Should succeed
+    assert delete_success.status_code == 200
+    assert db_session.query(UserStrategy).count() == 0
