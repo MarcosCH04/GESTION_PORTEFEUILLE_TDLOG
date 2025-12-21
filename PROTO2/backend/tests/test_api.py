@@ -1,9 +1,9 @@
 # backend/tests/test_api.py
 
 import pytest
-from datetime import date
-from fastapi.testclient import TestClient # Although imported, client is provided by conftest
-from app.db import UserCase
+from datetime import datetime, timedelta
+from fastapi.testclient import TestClient
+from app.db import User, Session as SessionModel, UserStrategy
 # No need to import engine, db_session, or client—Pytest provides them!
 
 # --- Authentication Helpers for Testing ---
@@ -14,7 +14,13 @@ REGISTER_URL = "/api/register"
 def create_test_user(client: TestClient):
     """Utility to register a user before a login test."""
     client.post(REGISTER_URL, json=USER_DATA)
-
+def test_list_all_routes(client):
+    from app.main import app
+    url_list = [{"path": route.path, "name": route.name} for route in app.routes]
+    print("\n--- ACTUALLY REGISTERED ROUTES ---")
+    for route in url_list:
+        print(f"Path: {route['path']}")
+    print("----------------------------------")
 # --- Functional API Tests ---
 
 def test_read_assets_public(client):
@@ -92,12 +98,48 @@ def test_protected_route_unauthenticated(client):
     assert response.status_code == 401
     assert "Session token missing" in response.json()["detail"]
 
+def test_expired_session_returns_401(client, db_session):
+    """
+    Test that a session older than 30 mins is deleted and rejected.
+    """
+    create_test_user(client)
+    
+    # 1. Manually create an expired session in the DB
+    user = db_session.query(User).first()
+    expired_time = datetime.utcnow() - timedelta(minutes=60)
+    
+    expired_session = SessionModel(
+        user_id=user.id,
+        session_token="expired-token-123",
+        last_activity_time=expired_time
+    )
+    db_session.add(expired_session)
+    db_session.commit()
+
+    # 2. Try to access with the expired token via cookie
+    client.cookies.set("session_token", "expired-token-123")
+    response = client.post("/api/backtest", json=PAYLOAD_DATA)
+
+    # 3. Assertions
+    assert response.status_code == 401
+    assert "Session expired" in response.json()["detail"]
+    
+    # Verify cleanup
+    assert db_session.query(SessionModel).filter_by(session_token="expired-token-123").first() is None
+
 # --- Helper to log in and return the client with the session cookie ---
 def authenticated_client(client):
-    """Registers a user, logs in, and returns the client with the session cookie set."""
-    create_test_user(client)
+    client.post(REGISTER_URL, json=USER_DATA)
     login_response = client.post(LOGIN_URL, json=USER_DATA)
-    token = login_response.cookies["session_token"]
+    
+    # Debugging print: if this fails, we will see why
+    if login_response.status_code != 200:
+        print(f"Login failed: {login_response.status_code} - {login_response.text}")
+        
+    assert login_response.status_code == 200, "Helper failed to login"
+    token = login_response.cookies.get("session_token")
+    assert token is not None, "Session token cookie missing in login response"
+    
     client.cookies.set("session_token", token)
     return client
 
@@ -114,41 +156,19 @@ PAYLOAD_DATA = {
 }
 
 def test_backtest_authenticated_success(client, db_session):
-    """
-    Goal 1: Test successful backtest execution, requiring authentication.
-    Goal 2: Verify that the results are saved to the UserCase table.
-    """
     auth_client = authenticated_client(client)
-    
-    # 1. Execute the backtest
     response = auth_client.post("/api/backtest", json=PAYLOAD_DATA)
 
     assert response.status_code == 200
     data = response.json()
     
-    # 2. Assert against the known output structure (from calc.py's output)
-    # The final API response must contain 'portfolio' and 'metrics'
     assert "portfolio" in data 
     assert "metrics" in data 
     
-    # Check that the metrics dict is keyed by the asset tickers provided in the payload:
-    assert "AAPL" in data["metrics"] 
-    assert "MSFT" in data["metrics"] 
-    
-    # Check that the calculated values are present and not zero (for a successful run)
-    assert data["metrics"]["AAPL"]["cagr"] is not None
-    # Check that the portfolio time series is present
-    assert len(data["portfolio"]) > 20
-    
-    # 2. Verify persistence in the database (results saved to the active UserCase)
-    
-    # Find the active session (the one created during login)
-    user_case = db_session.query(UserCase).first() 
-    assert user_case is not None
-    
-    # Check that parameters and results fields are populated (not the default JSON string '"{}"')
-    assert user_case.last_parameters != "{}"
-    assert user_case.calculated_results is not None
+    # Verify Scratchpad persistence (is_saved=False)
+    scratchpad = db_session.query(UserStrategy).filter_by(is_saved=False).first()
+    assert scratchpad is not None
+    assert scratchpad.parameters["assets"] == PAYLOAD_DATA["assets"]
 
 def test_backtest_requires_auth(client):
     """

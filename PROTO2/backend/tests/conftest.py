@@ -4,63 +4,69 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
-# Import core components from your application
+# 1. Import your FastAPI app and the Database components
 from app.main import app
 from app.db import Base, get_db
 
-# --- 1. Test Database Setup ---
+# --- DATABASE SETUP ---
 
-# Use an in-memory SQLite DB for maximum speed and isolation
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:" 
+# Use a shared in-memory SQLite database
+# StaticPool is required for in-memory SQLite to persist data across multiple connections
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
 @pytest.fixture(scope="session")
 def engine():
-    """Provides a SQLAlchemy engine connected to the in-memory test database."""
+    """Creates the SQLAlchemy engine for the test session."""
     return create_engine(
-        SQLALCHEMY_DATABASE_URL, 
-        connect_args={"check_same_thread": False}
+        SQLALCHEMY_DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
 
 @pytest.fixture(scope="session")
 def setup_test_db(engine):
-    """Creates all database tables defined in Base.metadata."""
-    # This runs once per test session
+    """Initializes the database schema once for the entire test session."""
     Base.metadata.create_all(bind=engine)
     yield
-    # Cleanup is often omitted for in-memory DBs, but kept for robustness
-    Base.metadata.drop_all(bind=engine) 
+    Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture(scope="function")
 def db_session(engine, setup_test_db):
     """
-    Provides a transactional database session for each test function.
-    All changes are rolled back after the test completes.
+    Provides a clean database session for every individual test.
+    Wraps the test in a transaction that is rolled back at the end.
     """
     connection = engine.connect()
     transaction = connection.begin()
     
-    # Create a new session bound to the connection
+    # Create a session bound to the connection
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
     db = TestingSessionLocal()
-    
-    # CRITICAL: Override FastAPI's dependency to use the test session
+
+    # --- CRITICAL: DEPENDENCY OVERRIDE ---
+    # This forces the FastAPI app to use the test database session 
+    # instead of the production one for all routes.
     app.dependency_overrides[get_db] = lambda: db
 
     yield db
 
-    # 1. Rollback transaction to clean the database state
     db.close()
     transaction.rollback()
     connection.close()
     
-    # 2. Clean up the dependency override
-    app.dependency_overrides = {}
+    # Clear the override after the test to keep the app 'clean'
+    app.dependency_overrides.clear()
 
 
-# --- 2. Test Client Fixture ---
+# --- TEST CLIENT SETUP ---
+
 @pytest.fixture(scope="function")
 def client(db_session):
-    """Provides an instance of FastAPI's TestClient for making API calls."""
-    # The client uses the dependency override set in db_session
-    return TestClient(app)
+    """
+    Provides a FastAPI TestClient. 
+    Because it's requested AFTER db_session, it uses the overridden database.
+    """
+    with TestClient(app) as c:
+        yield c

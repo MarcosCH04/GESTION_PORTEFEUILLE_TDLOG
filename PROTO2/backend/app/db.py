@@ -48,29 +48,33 @@ class DailyPrice(Base):
 # User Identity Table (Authentication)
 class User(Base):
     __tablename__ = "user"
-
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False) # Stores Argon2 hash
+    hashed_password = Column(String, nullable=False)
     
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    
-    cases = relationship("UserCase", back_populates="user")
+    sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+    strategies = relationship("UserStrategy", back_populates="user", cascade="all, delete-orphan")
 
-# User Session & Preference Storage
-class UserCase(Base):
-    __tablename__ = "user_case"
-
+# User Session 
+class Session(Base):
+    __tablename__ = "session"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("user.id"), nullable=False, index=True)
-    session_token = Column(String, unique=True, index=True) 
-    last_activity_time = Column(DateTime, default=datetime.utcnow, index=True) # 30-min timer (Python default is fine here)
-    is_favorite = Column(Boolean, default=False)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
+    session_token = Column(String, unique=True, index=True)
+    last_activity_time = Column(DateTime, default=datetime.utcnow)
     
-    # JSON stores Pydantic models (CaseParameters/CaseResults)
-    last_parameters = Column(JSON, nullable=False)
-    calculated_results = Column(JSON) 
-    
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    
-    user = relationship("User", back_populates="cases")
+    user = relationship("User", back_populates="sessions")
+
+# Preference Storage
+class UserStrategy(Base):
+    __tablename__ = "user_strategy"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
+    name = Column(String, default="Untitled Strategy")
+    # Store only inputs, not the massive results
+    parameters = Column(JSON, nullable=False) 
+    created_at = Column(DateTime, server_default=func.now())
+    is_saved = Column(Boolean, default=False, index=True) # False = "Latest", True = "Permanent"
+
+    user = relationship("User", back_populates="strategies")
+
