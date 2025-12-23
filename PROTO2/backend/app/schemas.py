@@ -31,6 +31,7 @@ class BacktestRequest(BaseModel):
 class BacktestResponse(BaseModel):
     portfolio: Dict[str, float]
     metrics: Dict[str, Metrics]
+    asset_prices: Dict[str, Dict[str, float]]
 
 # --- 3. Strategy Storage Schemas ---
 

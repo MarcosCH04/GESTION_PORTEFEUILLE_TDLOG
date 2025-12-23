@@ -44,6 +44,18 @@ def _load_assets_from_json() -> list:
 def list_assets() -> Dict[str, list]:
     return {"assets": _load_assets_from_json()}
 
+@router.post("/analyze", response_model=AnalyzeResponse)
+def analyze_assets(req: AnalyzeRequest):
+    prices_df = data_fetcher.get_prices(req.assets, str(req.start_date), str(req.end_date))
+    if prices_df.empty:
+        raise HTTPException(status_code=400, detail="No data found for selected assets.")
+    
+    metrics = calc.compute_metrics(prices_df)
+    # Convert DF to Dict[ISO_Date, Dict[Ticker, Price]]
+    prices_dict = {str(dt): row.dropna().to_dict() for dt, row in prices_df.iterrows()}
+    
+    return {"prices": prices_dict, "metrics": metrics}
+
 # --- 3. Authentication Endpoints ---
 
 @router.post("/register", response_model=UserInDB, status_code=status.HTTP_201_CREATED)
@@ -110,12 +122,41 @@ def run_backtest_protected(
     db: Session = Depends(get_db),
 ):
     try:
+        # 1. Fetch raw prices for the Asset Curves chart
+        # We fetch based on the main period requested
+        prices_df = data_fetcher.get_prices(
+            req.assets, 
+            start_date=str(req.start_date), 
+            end_date=str(req.end_date)
+        )
+
+        if prices_df.empty:
+            raise HTTPException(status_code=400, detail="No price data found for selected assets.")
+
+        # 2. Run the actual backtest logic
+        # Returns: (pd.Series of portfolio value, Dict of metrics)
         portfolio_series, metrics = calc.run_backtest(req)
+        
     except ValueError as e:
+        # Catch business logic errors (like weights not summing to 1)
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Catch unexpected infrastructure errors
+        print(f"Backtest Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error during calculation.")
 
-    portfolio_dict = {str(d.date()): float(v) for d, v in portfolio_series.items()}
+    # 3. Format Data for Frontend
+    # Convert Portfolio Series to { "YYYY-MM-DD": value }
+    portfolio_dict = {str(d): float(v) for d, v in portfolio_series.items()}
 
+    # Convert Asset DataFrame to { "YYYY-MM-DD": { "AAPL": price, "MSFT": price } }
+    asset_prices_dict = {
+        str(dt): row.dropna().to_dict() 
+        for dt, row in prices_df.iterrows()
+    }
+
+    # 4. Persistence: Update the 'latest_run' for this user
+    # This allows the "Save Strategy" feature to work later
     latest_run = db.query(UserStrategy).filter(
         UserStrategy.user_id == current_user.id,
         UserStrategy.is_saved == False
@@ -125,11 +166,18 @@ def run_backtest_protected(
         latest_run = UserStrategy(user_id=current_user.id, is_saved=False)
         db.add(latest_run)
 
+    # Convert the Pydantic request to a dict for JSON storage
     latest_run.parameters = json.loads(req.model_dump_json())
     latest_run.created_at = datetime.utcnow()
+    
     db.commit()
 
-    return BacktestResponse(portfolio=portfolio_dict, metrics=metrics)
+    # 5. Return everything the frontend needs
+    return {
+        "portfolio": portfolio_dict,
+        "metrics": metrics,
+        "asset_prices": asset_prices_dict
+    }
 
 @router.post("/strategies/save-current")
 def save_current_strategy(

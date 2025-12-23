@@ -83,26 +83,31 @@ function App() {
     // --- API Call Functions ---
 
     async function loadAssetData() {
-        setError("");
-        setPortfolio(null); 
-        if (selected.length === 0) {
-            setError("Veuillez sélectionner au moins un actif.");
-            return;
-        }
-        try {
-            const payload = {
-                assets: selected,
-                start_date: period.start,
-                end_date: period.end,
-            };
-            const res = await axios.post(`${API_BASE_URL}/analyze`, payload);
-            setAssetPrices(res.data.prices);
-            setMetrics(res.data.metrics);
-        } catch (e) {
-            console.error(e);
-            setError("Erreur lors du chargement des données d'actifs.");
-        }
+    setError("");
+    setPortfolio(null); 
+    if (selected.length === 0) {
+        setError("Veuillez sélectionner au moins un actif.");
+        return;
     }
+    try {
+        const payload = {
+            assets: selected,
+            start_date: period.start,
+            end_date: period.end,
+        };
+        const res = await axios.post(`${API_BASE_URL}/analyze`, payload);
+        
+        // DEBUG: Check what actually comes back
+        console.log("Analyze API Response:", res.data);
+
+        // FIX: Ensure you are using .prices (as defined in your backend)
+        setAssetPrices(res.data.prices); 
+        setMetrics(res.data.metrics);
+    } catch (e) {
+        console.error("Analyze Error:", e);
+        setError("Erreur lors du chargement des données d'actifs.");
+    }
+}
 
     async function runBacktest() {
         setError("");
@@ -133,6 +138,7 @@ function App() {
             const res = await axios.post(`${API_BASE_URL}/backtest`, payload);
             setPortfolio(res.data.portfolio);
             setMetrics(res.data.metrics); 
+            setAssetPrices(res.data.asset_prices);
         } catch (e) {
             console.error(e);
             // Crucial: Handle session expiration (401 from protected route)

@@ -1,11 +1,12 @@
-Implement Favourites (already have CaseParameters to start stocking them)
+#DONE   Implement Favourites (already have CaseParameters to start stocking them)
 Implement to dos with ##
 Add message in case of saving error /backend/app/api.py
 Explore empty-day issues and notifications
 Test : dates start > end
+Enforce frontend tests
 Explanation of use (HomePage)
 Test aleatory
-Test boite noire
+Test boite noire (OTW)
 SQLite disconnects?
 
 
@@ -13,4 +14,4 @@ Decide on language of comments and implement it.
 Frontend revision: consider Tailwind or Bootstrap for css, comment readable code.
 Extra backend: assets, metrics
 Document architecture
-Consider yfinance terms
+#DONE   Consider yfinance terms
