@@ -13,7 +13,7 @@ SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, 
-    connect_args={"check_same_thread": False} # Required for SQLite with FastAPI/threads
+    connect_args={"check_same_thread": False} # Required for SQLite with FastAPI
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -50,9 +50,9 @@ class User(Base):
     __tablename__ = "user"
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    hashed_password = Column(String, nullable=False) # Secure password storage
     
-    sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+    sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan") # If a user is deleted, all of their sessions are automatically deleted
     strategies = relationship("UserStrategy", back_populates="user", cascade="all, delete-orphan")
 
 # User Session 

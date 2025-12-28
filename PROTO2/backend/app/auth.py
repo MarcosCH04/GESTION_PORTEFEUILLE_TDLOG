@@ -51,13 +51,14 @@ def create_user_session(db: Session, user: User) -> SessionModel:
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """FastAPI Dependency: Authenticates the request via session cookie."""
+    #Retrieve session token from cookies
     token = request.cookies.get("session_token")
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Session token missing"
         )
-
+    # Lock up token in database
     session_record = db.query(SessionModel).filter(SessionModel.session_token == token).first()
 
     if not session_record:
@@ -66,7 +67,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
             detail="Invalid session token"
         )
 
-    # Inactivity timeout (30 minutes)
+    # Check expiration (30 minutes of inactivity)
     if datetime.utcnow() - session_record.last_activity_time > timedelta(minutes=30):
         db.delete(session_record)
         db.commit()
@@ -79,7 +80,8 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     session_record.last_activity_time = datetime.utcnow()
     db.commit()
     
-    return session_record.user
+    # Return autenticated user    
+    return session_record.user   
 
 def create_db_and_tables():
     """Utility to initialize the SQLite schema."""

@@ -18,12 +18,14 @@ from .auth import (
 )
 from .db import User, UserStrategy, Session as SessionModel 
 
-router = APIRouter()
+router = APIRouter() # Creating the API router
 
 # --- 1. Utility ---
 
 def _load_assets_from_json() -> list:
-    """Reads the list of available assets from assets.json or returns defaults."""
+    """
+    Reads the list of available assets from assets.json or returns defaults.
+    """
     here = os.path.dirname(os.path.abspath(__file__))
     assets_path = os.path.join(here, "assets.json")
 
@@ -35,6 +37,7 @@ def _load_assets_from_json() -> list:
             data = json.load(f)
             return data if isinstance(data, list) else data.get("assets", [])
     except Exception as e:
+        # General error handling (invalid JSON, permissions, etc.)
         print(f"Error loading assets.json: {e}")
         return ["AAPL", "MSFT", "SPY"]
 
@@ -42,10 +45,19 @@ def _load_assets_from_json() -> list:
 
 @router.get("/assets")
 def list_assets() -> Dict[str, list]:
+    """
+    Returns the list of assets available for analysis.
+    
+    :return: Description
+    :rtype: Dict[str, list] 
+    """
     return {"assets": _load_assets_from_json()}
 
 @router.post("/analyze", response_model=AnalyzeResponse)
 def analyze_assets(req: AnalyzeRequest):
+    """
+    Analyzes asset performance over a historical period
+    """
     prices_df = data_fetcher.get_prices(req.assets, str(req.start_date), str(req.end_date))
     if prices_df.empty:
         raise HTTPException(status_code=400, detail="No data found for selected assets.")
@@ -64,7 +76,7 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db_user = get_user_by_username(db, username=user.username)
     if db_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
+            status_code=status.HTTP_400_BAD_REQUEST,  # 400 = Bad request (client error)
             detail="Username already registered"
         )
     return create_user(db=db, user=user)
@@ -75,16 +87,20 @@ def login_for_access_token(
     user_data: UserCreate, 
     db: Session = Depends(get_db)
 ):
+    """ Authenticates user and creates a session cookie."""
+    # Retrieve user by username
     user = get_user_by_username(db, user_data.username)
-    
+
+    # Verify password
     if not user or not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Incorrect username or password"
         )
-
+    # Create session and set cookie
     session = create_user_session(db, user)
 
+    # Set HttpOnly cookie with the session token
     response.set_cookie(
         key="session_token",
         value=session.session_token,
@@ -93,7 +109,8 @@ def login_for_access_token(
         secure=False, 
         max_age=3600*24,
     )
-    
+
+    # Return login success message
     return {"message": "Login successful", "user_id": user.id}
 
 @router.post("/logout")
@@ -103,13 +120,17 @@ def logout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """ Logs out the current user by deleting the session."""
+    # Retrieve session token from cookies
     token = request.cookies.get("session_token")
+    # Delete session from database
     session_record = db.query(SessionModel).filter(SessionModel.session_token == token).first()
     
     if session_record:
         db.delete(session_record)
         db.commit()
     
+    # Remove the cookie from the client
     response.delete_cookie(key="session_token", httponly=True, samesite="lax", secure=False)
     return {"message": "Successfully logged out"}
 
@@ -121,6 +142,7 @@ def run_backtest_protected(
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_db),
 ):
+    """ Executes a backtest for the current user and stores the latest run."""
     try:
         # 1. Fetch raw prices for the Asset Curves chart
         # We fetch based on the main period requested
@@ -184,6 +206,8 @@ def save_current_strategy(
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_db)
 ):
+    """ Saves the most recent backtest as a named strategy for the user."""
+    # 1. Retrieving the latest unsaved strategy
     latest = db.query(UserStrategy).filter(
         UserStrategy.user_id == current_user.id, 
         UserStrategy.is_saved == False
@@ -191,7 +215,8 @@ def save_current_strategy(
     
     if not latest or not latest.parameters:
         raise HTTPException(status_code=404, detail="No recent backtest to save.")
-
+    
+    # 2. Check storage limit (max 5 saved strategies)
     saved_count = db.query(UserStrategy).filter(
         UserStrategy.user_id == current_user.id, 
         UserStrategy.is_saved == True
@@ -199,7 +224,8 @@ def save_current_strategy(
     
     if saved_count >= 5:
         raise HTTPException(status_code=400, detail="Storage full. Delete a strategy first.")
-
+    
+    # 3. Create a new saved strategy based on the latest unsaved one 
     new_saved = UserStrategy(
         user_id=current_user.id,
         parameters=latest.parameters,
@@ -212,6 +238,7 @@ def save_current_strategy(
 
 @router.get("/strategies", response_model=List[UserStrategySchema])
 def get_all_my_strategies(current_user: User = Depends(get_current_user)):
+    """ Retrieves all saved strategies for the current user."""
     return current_user.strategies
 
 @router.delete("/strategies/{strategy_id}")

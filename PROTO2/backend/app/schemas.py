@@ -4,21 +4,25 @@ from pydantic import BaseModel, ConfigDict
 
 # --- 1. Core Metrics ---
 class Metrics(BaseModel):
+    # Key performance metrics for investment analysis and backtesting
     cagr: float
     vol: float
     max_drawdown: float
 
 # --- 2. API Request/Response Schemas ---
 class AnalyzeRequest(BaseModel):
+    # List of asset tickers and date range for analysis
     assets: List[str]
     start_date: date
     end_date: date
 
 class AnalyzeResponse(BaseModel):
+    # Asset prices and computed metrics for each asset
     prices: Dict[str, Dict[str, float]] 
     metrics: Dict[str, Metrics]
 
 class BacktestRequest(BaseModel):
+    # Parameters for running an investment strategy backtest
     assets: List[str]
     start_date: date
     end_date: date
@@ -29,6 +33,7 @@ class BacktestRequest(BaseModel):
     strat_end: date
 
 class BacktestResponse(BaseModel):
+    # Results of the backtest including portfolio values and metrics
     portfolio: Dict[str, float]
     metrics: Dict[str, Metrics]
     asset_prices: Dict[str, Dict[str, float]]
@@ -36,7 +41,7 @@ class BacktestResponse(BaseModel):
 # --- 3. Strategy Storage Schemas ---
 
 class UserStrategySchema(BaseModel):
-    """Schema for the UserStrategy table records."""
+    # Schema for user-saved investment strategies in the database
     id: int
     name: str
     parameters: BacktestRequest # The inputs used for the backtest
@@ -47,12 +52,15 @@ class UserStrategySchema(BaseModel):
 
 # --- 4. Database/Auth Schemas ---
 class UserBase(BaseModel):
+    # Basic user information
     username: str
 
 class UserCreate(UserBase):
+    # User creation schema with password
     password: str
 
 class UserInDB(UserBase):
+    # User schema as stored in the database
     id: int
     # Optional allows it to be None/Missing without crashing the API response
     created_at: Optional[datetime] = None 

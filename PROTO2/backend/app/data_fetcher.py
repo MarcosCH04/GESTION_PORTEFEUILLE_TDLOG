@@ -21,7 +21,8 @@ def get_prices(
 ) -> pd.DataFrame:
     """
     Retrieves prices from the database (DailyPrice table), filling any date gaps 
-    with data fetched from yfinance. We add Session for testing.
+    with data fetched from yfinance. Returns a DataFrame with dates as index and symbols as columns 
+    We add Session for testing.
     """
     if not symbols:
         return pd.DataFrame()
@@ -86,6 +87,7 @@ def get_prices(
                     
                     for symbol in missing_symbols:
                         price = row.get(symbol)
+                        # Only store if price exists and was missing
                         if pd.notna(price) and (symbol, current_date) in missing_keys:
                             data_to_store = {"Close": float(price)} 
                             
@@ -109,6 +111,7 @@ def get_prices(
             .order_by(DailyPrice.date)\
             .all()
 
+        # Construct DataFrame
         records = []
         for dp in final_data:
             records.append({

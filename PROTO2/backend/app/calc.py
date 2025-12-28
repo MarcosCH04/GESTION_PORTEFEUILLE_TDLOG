@@ -14,9 +14,10 @@ from . import data_fetcher
 
 def _cagr(series: pd.Series) -> float:
     """
-    Calcule le CAGR (taux de croissance annualisé) à partir d'une série de prix.
+    Calculates the CAGR = Compound Annual Growth Rate from a price series.
+    CAGR = (Final_value / Initial_value)^(1/number_of_years) - 1
     """
-    series = series.dropna()
+    series = series.dropna() 
     if len(series) < 2:
         return 0.0
     start = series.iloc[0]
@@ -30,7 +31,8 @@ def _cagr(series: pd.Series) -> float:
 
 def _vol(series: pd.Series) -> float:
     """
-    Volatilité annualisée à partir des rendements journaliers.
+    Calculates annualized volatility from daily returns.
+    252 : number of stock market days in a year
     """
     series = series.dropna()
     if len(series) < 2:
@@ -41,19 +43,21 @@ def _vol(series: pd.Series) -> float:
 
 def _max_drawdown(series: pd.Series) -> float:
     """
-    Max drawdown : pire perte relative par rapport au plus haut historique.
+    Calculates maximum drawdown: worst loss relative to historical peak.
+    Max Drawdown = min((Price - Peak)/Peak) 
     """
     series = series.dropna()
     if len(series) < 2:
         return 0.0
-    peak = series.cummax()
+    peak = series.cummax() # cummax(): All-time high at each point
     dd = (series - peak) / peak
     return float(dd.min())
 
 
 def compute_metrics(prices: pd.DataFrame) -> Dict[str, Metrics]:
     """
-    Calcule les métriques pour chaque colonne (ticker) du DataFrame.
+    Computes financial metrics (CAGR, volatility, max drawdown) 
+    for each asset (column) in the DataFrame.
     """
     metrics: Dict[str, Metrics] = {}
     for col in prices.columns:
@@ -75,42 +79,39 @@ def _build_portfolio_series_from_cagr(
     strategy: str,
 ) -> pd.Series:
     """
-    Construit une série temporelle de valeur de portefeuille en utilisant
-    uniquement les CAGR de chaque actif.
-
-    - buy_and_hold : on investit tout au début.
-    - dca         : on investit une somme fixe au début de chaque mois.
+    Builds a synthetic portfolio time series using CAGR-based growth simulation.
+    Supports two strategies:
+    - buy_and_hold: Invest full amount at start
+    - dca: Dollar-Cost Averaging with monthly contributions
     """
 
     weights = np.array(weights, dtype=float)
-    weights = weights / weights.sum()  # normalisation
+    weights = weights / weights.sum()  # Normalize weights to sum to 1
 
-    # Pour chaque actif, on calcule un taux de croissance quotidien
-    # à partir du CAGR annuel.
+    # Convert annual CAGR to daily growth rate for each asset
     daily_rates = []
     for asset in assets:
         r_annual = metrics[asset].cagr
-        # croissance composée quotidienne approx.
         daily = (1.0 + r_annual) ** (1.0 / 252.0) - 1.0
         daily_rates.append(daily)
     daily_rates = np.array(daily_rates)
 
-    # Construction de la série de dates (jours calendaires)
+    # Building the date series (calendar days)
     n_days = len(dates)
-    days_index = np.arange(n_days, dtype=float)  # 0,1,2,... pour l'exponentiation
+    days_index = np.arange(n_days, dtype=float)  # 0,1,2,... for exponentiation
 
     if strategy == "buy_and_hold":
-        # Tout investi au début
+        # Fully invested from the beginning 
         alloc_per_asset = invest_amount * weights
         # valeur(t) = alloc * (1 + r_daily)^t
         growth_factors = (1.0 + daily_rates) ** days_index[:, None]  # shape (n_days, n_assets)
         values = growth_factors * alloc_per_asset  # broadcast
-        portfolio = values.sum(axis=1)  # somme sur les actifs
+        portfolio = values.sum(axis=1)  # sum over assets
         return pd.Series(portfolio, index=dates)
 
     elif strategy == "dca":
-        # On investit la même somme au début de chaque mois.
-        # Nombre de mois dans la période
+        # We invest the same amount at the beginning of each month.
+        # Number of months in the investment period
         months = sorted(
             { (d.year, d.month) for d in dates }
         )
@@ -120,21 +121,21 @@ def _build_portfolio_series_from_cagr(
         n_months = len(months)
         monthly_contrib_total = invest_amount / n_months
 
-        # mapping (year, month) -> index dans dates
+        # mapping (year, month) -> index in dates
         first_day_idx_per_month = {}
         for idx, d in enumerate(dates):
             key = (d.year, d.month)
             if key not in first_day_idx_per_month:
                 first_day_idx_per_month[key] = idx
 
-        # on construit la valeur de portefeuille jour par jour
+        # Building the portfolio value day by day
         portfolio = np.zeros(n_days, dtype=float)
 
         for key in months:
             start_idx = first_day_idx_per_month[key]
-            # ce mois-là, on investit une somme totale
+            # This month, we invest a total amount
             alloc_per_asset = monthly_contrib_total * weights
-            # les jours à partir de start_idx
+            # days from start_idx
             local_days = np.arange(n_days - start_idx, dtype=float)
             growth = (1.0 + daily_rates) ** local_days[:, None]
             contrib_values = growth * alloc_per_asset
@@ -143,17 +144,16 @@ def _build_portfolio_series_from_cagr(
         return pd.Series(portfolio, index=dates)
 
     else:
-        # Au cas où, on ne fait rien de spécial
+        # if unknown strategy
         return pd.Series([0.0] * n_days, index=dates)
 
 
 def run_backtest(req: BacktestRequest):
     """
-    Backtest global :
-    1. Récupère les prix des actifs sur la période de backtest (start_date, end_date).
-    2. Calcule les métriques (CAGR, vol, max drawdown).
-    3. Construit un portefeuille synthétique sur [strat_start, strat_end]
-       en utilisant les CAGR uniquement.
+    Executes a complete backtest workflow:
+    1. Fetches historical prices for the assets
+    2. Computes performance metrics (CAGR, volatility, drawdown)
+    3. Simulates portfolio growth using CAGR-based projections
     """
 
     # Some basic validations.
@@ -165,7 +165,7 @@ def run_backtest(req: BacktestRequest):
         raise ValueError("Le nombre d'actifs ne correspond pas au nombre de poids.")
     
 
-    # 1. Prix pour le calcul des métriques
+    # 1. Fetch price data for metrics calculation
     prices = data_fetcher.get_prices(
         req.assets,
         start_date=str(req.start_date),
@@ -188,10 +188,10 @@ def run_backtest(req: BacktestRequest):
         # Return an empty portfolio series and the structured metrics
         return pd.Series(), safe_metrics
     
-    # 2. Métriques
+    # 2. Calculate performance metrics
     metrics = compute_metrics(prices)
 
-    # 3. Série temporelle synthétique de portefeuille
+    # 3. Build synthetic portfolio series over strategy period
     strat_dates = pd.date_range(
         start=req.strat_start,
         end=req.strat_end,

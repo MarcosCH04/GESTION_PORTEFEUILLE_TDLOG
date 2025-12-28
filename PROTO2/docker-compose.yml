@@ -6,7 +6,7 @@ services:
     container_name: backend
     volumes:
       - ./backend/app:/app/app
-      - ./backend/data:/app/data
+      - ./backend/data:/app/data  #La base de données SQLite survit même si on détruit le conteneur
     ports:
       - "8000:8000"
 

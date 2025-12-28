@@ -1,5 +1,7 @@
 # backend/app/main.py
 
+#This is the main entry point for the FastAPI backend application for the Investment Backtester project.
+# It sets up the FastAPI app, configures CORS to allow requests from the frontend, Runs database initialization, and registers API routes.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,15 +9,14 @@ from .api import router as api_router
 from .db import Base, engine # Import engine and Base
 from .auth import create_db_and_tables # Import the initialization function
 
-# ----------------------------------------------------
-# 1. INITIALIZE DATABASE TABLES ON STARTUP
-# ----------------------------------------------------
+
+# 1. Initilize database tables on startup 
 create_db_and_tables() 
 
-
+# 2. Set up FastAPI appp 
 app = FastAPI(title="Investment Backtester API")
 
-# CORS pour autoriser le frontend
+# 3. Configuration for CORS to allow frontend-backend communication
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
