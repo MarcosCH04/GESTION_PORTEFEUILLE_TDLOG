@@ -1,11 +1,13 @@
+// frontend/src/App.jsx
+
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-// --- Authentication Components & Utility ---
+// Authentication Components and Utilities
 import LoginForm from "./components/LoginForm"; 
 import RegistrationForm from "./components/RegistrationForm";
 import { authRequest } from "./api"; 
-// --- Main App Components ---
+// Main Application Components 
 import HomePage from "./components/HomePage"; 
 import AssetSelector from "./components/AssetSelector";
 import PeriodSelector from "./components/PeriodSelector";
@@ -19,6 +21,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api"
 // Configure Axios globally to send cookies with all requests
 axios.defaults.withCredentials = true;
 
+// Application View States 
 const VIEW_STATES = {
     HOME: 'home',
     LOGIN: 'login',
@@ -28,25 +31,32 @@ const VIEW_STATES = {
 
 
 function App() {
-    // --- ROUTING & AUTH STATE ---
+    // --- Authentication and View State ---
     const [currentView, setCurrentView] = useState(VIEW_STATES.HOME); 
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    // ----------------------------
 
+    // --- Asset Selection states ---
     const [assets, setAssets] = useState([]);
     const [selected, setSelected] = useState([]);
+
+    // --- Analysis Period State
     const [period, setPeriod] = useState({
         start: "2018-01-01",
         end: "2023-01-01",
     });
+
+    // --- Portfolio Configuration State ---
     const [amount, setAmount] = useState(10000);
     const [weights, setWeights] = useState({});
+    
+    // --- Strategy Configuration State ---
     const [strategy, setStrategy] = useState({
         type: "buy_and_hold",
         stratStart: "2020-01-01",
         stratEnd: "2023-01-01",
     });
 
+    // --- Results and Error State ---
     const [assetPrices, setAssetPrices] = useState(null); 
     const [metrics, setMetrics] = useState(null); 
     const [portfolio, setPortfolio] = useState(null); 
@@ -82,6 +92,10 @@ function App() {
 
     // --- API Call Functions ---
 
+    /**
+     * Loads historical price data and metrics for selected assets
+     * This is a public endpoint (no authentication required)
+     */
     async function loadAssetData() {
     setError("");
     setPortfolio(null); 
@@ -97,10 +111,9 @@ function App() {
         };
         const res = await axios.post(`${API_BASE_URL}/analyze`, payload);
         
-        // DEBUG: Check what actually comes back
         console.log("Analyze API Response:", res.data);
 
-        // FIX: Ensure you are using .prices (as defined in your backend)
+        // Store price data and metrics from backend response
         setAssetPrices(res.data.prices); 
         setMetrics(res.data.metrics);
     } catch (e) {
@@ -108,7 +121,10 @@ function App() {
         setError("Erreur lors du chargement des données d'actifs.");
     }
 }
-
+    /**
+     * Runs portfolio backtest simulation
+     * This is a protected endpoint (requires authentication)
+     */
     async function runBacktest() {
         setError("");
         if (selected.length === 0) {
@@ -116,6 +132,7 @@ function App() {
             return;
         }
 
+        // Build weights array matching selected assets order
         const w = selected.map((s) => weights[s] ?? 0);
         const sumW = w.reduce((acc, x) => acc + x, 0);
         if (sumW <= 0) {
@@ -134,14 +151,16 @@ function App() {
                 strat_start: strategy.stratStart,
                 strat_end: strategy.stratEnd,
             };
-            // This endpoint requires the session cookie
+            // Send authenticated request (uses session cookie)
             const res = await axios.post(`${API_BASE_URL}/backtest`, payload);
+            
+            // Store backtest results from backend response
             setPortfolio(res.data.portfolio);
             setMetrics(res.data.metrics); 
             setAssetPrices(res.data.asset_prices);
         } catch (e) {
             console.error(e);
-            // Crucial: Handle session expiration (401 from protected route)
+            // Handle session expiration (401 from protected route)
             if (e.response && e.response.status === 401) {
                 setError("Session expirée. Veuillez vous reconnecter.");
                 setIsAuthenticated(false);
@@ -153,7 +172,7 @@ function App() {
     }
     
     // --- Data Loading Effect ---
-    // Fetch assets on mount, regardless of login status (as they are public)
+    // Fetch available assets on component mount (public endpoint)
     useEffect(() => {
         axios.get(`${API_BASE_URL}/assets`)
             .then((res) => setAssets(res.data.assets))
@@ -166,54 +185,70 @@ function App() {
     
     // --- RENDER ROUTER ---
     
-    // 1. Render Main App if authenticated
-    if (isAuthenticated && currentView === VIEW_STATES.MAIN_APP) {
-        return (
-            <div className="app-container">
-                <header className="app-header">
-                    <h1>Investment Backtester (prototype)</h1>
-                    <button onClick={handleLogout}>Déconnexion</button>
-                </header>
+    // 1. Main application view (requires authentication)
+ if (isAuthenticated && currentView === VIEW_STATES.MAIN_APP) {
+    return (
+        <div className="app-container">
+            <header className="app-header">
+                <h1>Investment Backtester (prototype)</h1>
+                <button onClick={handleLogout}>Déconnexion</button>
+            </header>
 
-                {error && <p style={{ color: "red" }}>{error}</p>}
+            {error && <p style={{ color: "red" }}>{error}</p>}
 
-                {/* Main components and logic moved here */}
-                <AssetSelector
-                    assets={assets}
-                    selected={selected}
-                    setSelected={setSelected}
-                    weights={weights}
-                    setWeights={setWeights}
-                />
+            {/* Asset selection with weight allocation */}
+            <AssetSelector
+                assets={assets}
+                selected={selected}
+                setSelected={setSelected}
+                weights={weights}
+                setWeights={setWeights}
+            />
 
-                <PeriodSelector period={period} setPeriod={setPeriod} />
+            {/* Historical data period selector */}
+            <PeriodSelector period={period} setPeriod={setPeriod} />
 
-                <div className="section">
-                    <button onClick={loadAssetData}>Charger les données des actifs</button>
-                </div>
-
-                <Charts assetPrices={assetPrices} portfolio={portfolio} />
-                <PortfolioTable selectedAssets={selected} metrics={metrics} />
-
-                <div className="section">
-                    <h2>Montant total à investir</h2>
-                    <input
-                        type="number"
-                        value={amount}
-                        onChange={(e) => setAmount(Number(e.target.value))}
-                    />
-                </div>
-
-                <StrategyForm strategy={strategy} setStrategy={setStrategy} />
-
-                <div className="section">
-                    <button onClick={runBacktest}>Lancer le backtest de portefeuille</button>
-                </div>
+            <div className="section">
+                <button onClick={loadAssetData}>Charger les données des actifs</button>
             </div>
-        );
-    }
 
-    // 2. Render Auth Views based on state
+            {/* Asset price chart */}
+            {assetPrices && (
+                <Charts assetPrices={assetPrices} portfolio={null} />
+            )}
+            
+            {/* Performance metrics table */}
+            <PortfolioTable selectedAssets={selected} metrics={metrics} />
+
+            {/* Investment amount input */}
+            <div className="section">
+                <h2>Montant total à investir</h2>
+                <input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(Number(e.target.value))}
+                />
+            </div>
+
+            {/* Strategy configuration */}
+            <StrategyForm strategy={strategy} setStrategy={setStrategy} />
+
+            <div className="section">
+                <button onClick={runBacktest}>Lancer le backtest de portefeuille</button>
+            </div>
+
+            {/* Portfolio chart */}
+            {portfolio && (
+                <div className="section">
+                    <h2>Performance du portefeuille (Valeur totale)</h2>
+                    <Charts assetPrices={null} portfolio={portfolio} />
+                </div>
+            )}
+        </div>
+    );
+}
+
+    // 2. Authentication and home views
     switch (currentView) {
         case VIEW_STATES.LOGIN:
             return (

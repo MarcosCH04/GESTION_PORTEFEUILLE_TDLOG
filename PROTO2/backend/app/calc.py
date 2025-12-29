@@ -53,6 +53,89 @@ def _max_drawdown(series: pd.Series) -> float:
     dd = (series - peak) / peak
     return float(dd.min())
 
+def _annualized_return(series: pd.Series) -> float:
+    """
+    Calculates simple annualized return (average yearly return).
+    Different from CAGR: this is the arithmetic mean of annual returns.
+    """
+    series = series.dropna()
+    if len(series) < 2:
+        return 0.0
+    returns = series.pct_change().dropna()
+    days = len(returns)
+    if days == 0:
+        return 0.0
+    # Annualize the mean daily return
+    return float(returns.mean() * 252)
+
+
+def _best_year(series: pd.Series) -> float:
+    """
+    Calculates the best annual return (highest yearly performance).
+    """
+    series = series.dropna()
+    if len(series) < 2:
+        return 0.0
+    
+    if not isinstance(series.index, pd.DatetimeIndex):
+        try:
+            series.index = pd.to_datetime(series.index)
+        except Exception:
+            return 0.0
+    
+    # Group by year and calculate annual returns
+    yearly_returns = series.resample('Y').last().pct_change().dropna()
+    
+    if len(yearly_returns) == 0:
+        return 0.0
+    
+    return float(yearly_returns.max())
+
+def _worst_year(series: pd.Series) -> float:
+    """
+    Calculates the worst annual return (lowest yearly performance).
+    """
+    series = series.dropna()
+    if len(series) < 2:
+        return 0.0
+    
+    if not isinstance(series.index, pd.DatetimeIndex):
+        try:
+            series.index = pd.to_datetime(series.index)
+        except Exception:
+            return 0.0
+    
+    # Group by year and calculate annual returns
+    yearly_returns = series.resample('Y').last().pct_change().dropna()
+    
+    if len(yearly_returns) == 0:
+        return 0.0
+    
+    return float(yearly_returns.min())
+
+
+
+def _sharpe_ratio(series: pd.Series, risk_free_rate: float = 0.02) -> float:
+    """
+    Calculates the Sharpe Ratio: (Return - Risk_Free_Rate) / Volatility
+    Default risk-free rate: 2% per year
+    """
+    series = series.dropna()
+    if len(series) < 2:
+        return 0.0
+    
+    returns = series.pct_change().dropna()
+    if len(returns) == 0:
+        return 0.0
+    
+    # Annualized return and volatility
+    annual_return = returns.mean() * 252
+    annual_vol = returns.std() * np.sqrt(252)
+    
+    if annual_vol == 0:
+        return 0.0
+    
+    return float((annual_return - risk_free_rate) / annual_vol)
 
 def compute_metrics(prices: pd.DataFrame) -> Dict[str, Metrics]:
     """
@@ -66,6 +149,10 @@ def compute_metrics(prices: pd.DataFrame) -> Dict[str, Metrics]:
             cagr=_cagr(s),
             vol=_vol(s),
             max_drawdown=_max_drawdown(s),
+            annualized_return=_annualized_return(s),
+            best_year=_best_year(s),
+            worst_year=_worst_year(s),
+            sharpe_ratio=_sharpe_ratio(s),
         )
     return metrics
 

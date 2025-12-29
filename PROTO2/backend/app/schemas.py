@@ -8,7 +8,10 @@ class Metrics(BaseModel):
     cagr: float
     vol: float
     max_drawdown: float
-
+    annualized_return: float = 0.0 
+    best_year: float = 0.0           
+    worst_year: float = 0.0          
+    sharpe_ratio: float = 0.0
 # --- 2. API Request/Response Schemas ---
 class AnalyzeRequest(BaseModel):
     # List of asset tickers and date range for analysis
