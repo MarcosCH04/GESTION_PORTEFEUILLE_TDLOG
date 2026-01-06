@@ -14,6 +14,7 @@ import PeriodSelector from "./components/PeriodSelector";
 import StrategyForm from "./components/StrategyForm";
 import PortfolioTable from "./components/PortfolioTable";
 import Charts from "./components/Charts";
+import SavedStrategiesList from "./components/SavedStrategiesList";
 
 // VITE_API_URL should be set to http://backend:8000/api
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
@@ -170,6 +171,50 @@ function App() {
             }
         }
     }
+
+    // --- Strategy Saving Function (Protected) ---
+    async function saveStrategy() {
+    try {
+        await axios.post(`${API_BASE_URL}/strategies/save-current`);
+        alert("Stratégie enregistrée avec succès !");
+    } catch (e) {
+        const msg = e.response?.data?.detail || "Erreur lors de l'enregistrement.";
+        setError(msg);
+    }
+}
+    // --- Load Saved Strategy Parameters ---
+    const loadSavedParameters = (params) => {
+    // 1. Update Asset Selection
+    setSelected(params.assets || []);
+
+    // 2. Update Investment Amount
+    setAmount(params.invest_amount || 10000);
+
+    // 3. Update Analysis Period
+    setPeriod({
+        start: params.start_date || "2018-01-01",
+        end: params.end_date || "2023-01-01",
+    });
+
+    // 4. Update Strategy Method & Simulation Dates
+    // Note the mapping from snake_case (backend) to camelCase (frontend state)
+    setStrategy({
+        type: params.strategy || "buy_and_hold",
+        stratStart: params.strat_start || "2020-01-01",
+        stratEnd: params.strat_end || "2023-01-01", 
+    });
+    
+    // 5. Update Weights Object
+    const newWeights = {};
+    if (params.assets && params.weights) {
+        params.assets.forEach((asset, index) => {
+            newWeights[asset] = params.weights[index] || 0;
+        });
+    }
+    setWeights(newWeights);
+    
+    alert("Paramètres chargés ! Cliquez sur 'Lancer le backtest'.");
+};
     
     // --- Data Loading Effect ---
     // Fetch available assets on component mount (public endpoint)
@@ -239,11 +284,25 @@ function App() {
 
             {/* Portfolio chart */}
             {portfolio && (
-                <div className="section">
-                    <h2>Performance du portefeuille (Valeur totale)</h2>
-                    <Charts assetPrices={null} portfolio={portfolio} />
-                </div>
+                <>
+                    <div className="section">
+                        <h2>Performance du portefeuille (Valeur totale)</h2>
+                        <Charts assetPrices={null} portfolio={portfolio} />
+                    </div>
+                    
+                    <div className="section">
+                        <button 
+                            onClick={saveStrategy}
+                            style={{ backgroundColor: '#22c55e', color: 'white' }}
+                        >
+                            Sauvegarder cette configuration
+                        </button>
+                    </div>
+                </>
             )}
+
+            {/* Saved Strategies List */}
+            <SavedStrategiesList onLoadStrategy={loadSavedParameters} />
         </div>
     );
 }

@@ -84,7 +84,7 @@ def _best_year(series: pd.Series) -> float:
             return 0.0
     
     # Group by year and calculate annual returns
-    yearly_returns = series.resample('Y').last().pct_change().dropna()
+    yearly_returns = series.resample('YE').last().pct_change().dropna()
     
     if len(yearly_returns) == 0:
         return 0.0
@@ -106,7 +106,7 @@ def _worst_year(series: pd.Series) -> float:
             return 0.0
     
     # Group by year and calculate annual returns
-    yearly_returns = series.resample('Y').last().pct_change().dropna()
+    yearly_returns = series.resample('YE').last().pct_change().dropna()
     
     if len(yearly_returns) == 0:
         return 0.0
