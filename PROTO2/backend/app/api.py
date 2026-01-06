@@ -53,21 +53,6 @@ def list_assets() -> Dict[str, list]:
     """
     return {"assets": _load_assets_from_json()}
 
-@router.post("/analyze", response_model=AnalyzeResponse)
-def analyze_assets(req: AnalyzeRequest):
-    """
-    Analyzes asset performance over a historical period
-    """
-    prices_df = data_fetcher.get_prices(req.assets, str(req.start_date), str(req.end_date))
-    if prices_df.empty:
-        raise HTTPException(status_code=400, detail="No data found for selected assets.")
-    
-    metrics = calc.compute_metrics(prices_df)
-    # Convert DF to Dict[ISO_Date, Dict[Ticker, Price]]
-    prices_dict = {str(dt): row.dropna().to_dict() for dt, row in prices_df.iterrows()}
-    
-    return {"prices": prices_dict, "metrics": metrics}
-
 # --- 3. Authentication Endpoints ---
 
 @router.post("/register", response_model=UserInDB, status_code=status.HTTP_201_CREATED)
@@ -134,7 +119,24 @@ def logout(
     response.delete_cookie(key="session_token", httponly=True, samesite="lax", secure=False)
     return {"message": "Successfully logged out"}
 
-# --- 4. Protected Strategy Endpoints ---
+# --- 4. Protected Endpoints ---
+
+@router.post("/analyze", response_model=AnalyzeResponse)
+def analyze_assets(req: AnalyzeRequest,
+                   current_user: User = Depends(get_current_user)):
+    """
+    Analyzes asset performance over a historical period
+    """
+    prices_df = data_fetcher.get_prices(req.assets, str(req.start_date), str(req.end_date))
+    if prices_df.empty:
+        raise HTTPException(status_code=400, detail="No data found for selected assets.")
+    
+    metrics = calc.compute_metrics(prices_df)
+    # Convert DF to Dict[ISO_Date, Dict[Ticker, Price]]
+    prices_dict = {str(dt): row.dropna().to_dict() for dt, row in prices_df.iterrows()}
+    
+    return {"prices": prices_dict, "metrics": metrics}
+
 
 @router.post("/backtest", response_model=BacktestResponse)
 def run_backtest_protected(

@@ -172,8 +172,8 @@ def _build_portfolio_series_from_cagr(
     - dca: Dollar-Cost Averaging with monthly contributions
     """
 
-    weights = np.array(weights, dtype=float)
-    weights = weights / weights.sum()  # Normalize weights to sum to 1
+    weights_array = np.array(weights, dtype=float)
+    weights_array = weights_array / weights_array.sum()  # Normalize weights to sum to 1
 
     # Convert annual CAGR to daily growth rate for each asset
     daily_rates = []
@@ -189,7 +189,7 @@ def _build_portfolio_series_from_cagr(
 
     if strategy == "buy_and_hold":
         # Fully invested from the beginning 
-        alloc_per_asset = invest_amount * weights
+        alloc_per_asset = invest_amount * weights_array
         # valeur(t) = alloc * (1 + r_daily)^t
         growth_factors = (1.0 + daily_rates) ** days_index[:, None]  # shape (n_days, n_assets)
         values = growth_factors * alloc_per_asset  # broadcast
@@ -221,7 +221,7 @@ def _build_portfolio_series_from_cagr(
         for key in months:
             start_idx = first_day_idx_per_month[key]
             # This month, we invest a total amount
-            alloc_per_asset = monthly_contrib_total * weights
+            alloc_per_asset = monthly_contrib_total * weights_array
             # days from start_idx
             local_days = np.arange(n_days - start_idx, dtype=float)
             growth = (1.0 + daily_rates) ** local_days[:, None]
