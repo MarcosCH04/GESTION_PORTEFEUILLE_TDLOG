@@ -10,7 +10,7 @@ from . import data_fetcher, calc
 from .schemas import (
     AnalyzeRequest, AnalyzeResponse,
     BacktestRequest, BacktestResponse,
-    UserCreate, UserInDB, UserStrategySchema
+    UserCreate, UserInDB, UserStrategySchema, SaveRequest
 )
 from .auth import ( 
     create_user, get_user_by_username, verify_password, create_user_session,
@@ -185,7 +185,9 @@ def run_backtest_protected(
     ).first()
 
     if not latest_run:
-        latest_run = UserStrategy(user_id=current_user.id, is_saved=False)
+        latest_run = UserStrategy(user_id=current_user.id, 
+                                  is_saved=False,
+                                  name="Latest Unsaved Strategy")
         db.add(latest_run)
 
     # Convert the Pydantic request to a dict for JSON storage
@@ -203,6 +205,7 @@ def run_backtest_protected(
 
 @router.post("/strategies/save-current")
 def save_current_strategy(
+    req: SaveRequest,
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_db)
 ):
@@ -230,7 +233,7 @@ def save_current_strategy(
         user_id=current_user.id,
         parameters=latest.parameters,
         is_saved=True,
-        name=f"Saved Strategy {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+        name=req.name
     )
     db.add(new_saved)
     db.commit()

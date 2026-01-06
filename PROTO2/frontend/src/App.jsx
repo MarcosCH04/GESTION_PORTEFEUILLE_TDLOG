@@ -57,6 +57,9 @@ function App() {
         stratEnd: "2023-01-01",
     });
 
+    // --- User Saved Strategies --- 
+    const [savedStrats, setSavedStrats] = useState([]);
+
     // --- Results and Error State ---
     const [assetPrices, setAssetPrices] = useState(null); 
     const [metrics, setMetrics] = useState(null); 
@@ -74,6 +77,27 @@ function App() {
         setCurrentView(VIEW_STATES.LOGIN); // Go to login after successful registration
     };
 
+    // Helper function to reset application state on logout
+    const resetForm = () => {
+        setSelected([]);
+        setAmount(10000);
+        setWeights({});
+        setPeriod({
+            start: "2018-01-01",
+            end: "2023-01-01",
+        });
+        setStrategy({
+            type: "buy_and_hold",
+            stratStart: "2020-01-01",
+            stratEnd: "2023-01-01",
+        });
+        setAssetPrices(null);
+        setMetrics(null);
+        setPortfolio(null);
+        setSavedStrats([]); // Clear the list of strategies
+        setError("");
+    };
+
     const handleLogout = async () => {
         try {
             // 1. Clear server session/cookie
@@ -84,12 +108,26 @@ function App() {
             // 2. Clear sensitive data and reset view state
             setIsAuthenticated(false);
             setCurrentView(VIEW_STATES.HOME); 
-            setAssetPrices(null);
-            setMetrics(null);
-            setPortfolio(null);
-            setError("");
+            resetForm();
         }
     };
+
+    // --- Refresh Strategies Function ---
+
+    const refreshStrategies = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/strategies`);
+            setSavedStrats(res.data);
+        } catch (err) {
+            console.error("Erreur actualisation list:", err);
+        }
+    };
+
+    useEffect(() => {
+        if (isAuthenticated) {
+            refreshStrategies();
+        }
+    }, [isAuthenticated]);
 
     // --- API Call Functions ---
 
@@ -117,6 +155,7 @@ function App() {
         // Store price data and metrics from backend response
         setAssetPrices(res.data.prices); 
         setMetrics(res.data.metrics);
+
     } catch (e) {
         console.error("Analyze Error:", e);
         setError("Erreur lors du chargement des données d'actifs.");
@@ -159,6 +198,9 @@ function App() {
             setPortfolio(res.data.portfolio);
             setMetrics(res.data.metrics); 
             setAssetPrices(res.data.asset_prices);
+
+            // Refresh saved strategies list
+            refreshStrategies();
         } catch (e) {
             console.error(e);
             // Handle session expiration (401 from protected route)
@@ -174,14 +216,28 @@ function App() {
 
     // --- Strategy Saving Function (Protected) ---
     async function saveStrategy() {
-    try {
-        await axios.post(`${API_BASE_URL}/strategies/save-current`);
-        alert("Stratégie enregistrée avec succès !");
-    } catch (e) {
-        const msg = e.response?.data?.detail || "Erreur lors de l'enregistrement.";
-        setError(msg);
+        setError("");
+        
+        // Prompt the user
+        const input = window.prompt("Entrez un nom pour cette stratégie:", "Ma Stratégie");
+        
+        // If user clicks "Cancel", input is null. 
+        if (input === null) return; 
+
+        // Use input if not empty, otherwise fallback to a default
+        const finalName = input.trim() || `Stratégie du ${new Date().toLocaleDateString()}`;
+
+        try {
+            await axios.post(`${API_BASE_URL}/strategies/save-current`, {
+                name: finalName
+            });
+            alert("Stratégie enregistrée !");
+            refreshStrategies();
+        } catch (e) {
+            setError("Erreur lors de la sauvegarde.");
+        }
     }
-}
+
     // --- Load Saved Strategy Parameters ---
     const loadSavedParameters = (params) => {
     // 1. Update Asset Selection
@@ -214,7 +270,8 @@ function App() {
     setWeights(newWeights);
     
     alert("Paramètres chargés ! Cliquez sur 'Lancer le backtest'.");
-};
+    };
+
     
     // --- Data Loading Effect ---
     // Fetch available assets on component mount (public endpoint)
@@ -302,7 +359,11 @@ function App() {
             )}
 
             {/* Saved Strategies List */}
-            <SavedStrategiesList onLoadStrategy={loadSavedParameters} />
+            <SavedStrategiesList 
+                savedStrats={savedStrats} 
+                onRefresh={refreshStrategies} 
+                onLoadStrategy={loadSavedParameters} 
+            />
         </div>
     );
 }

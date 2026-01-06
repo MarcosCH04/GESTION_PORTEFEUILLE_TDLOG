@@ -53,6 +53,10 @@ class UserStrategySchema(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class SaveRequest(BaseModel):
+    # Schema for extra data needed to save a user strategy
+    name: str
+
 # --- 4. Database/Auth Schemas ---
 class UserBase(BaseModel):
     # Basic user information
