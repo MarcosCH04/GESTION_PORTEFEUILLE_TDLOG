@@ -195,7 +195,7 @@ function App() {
             showToast("Strategy saved successfully!", "success");
             refreshStrategies();
         } catch (e) {
-            showToast("Failed to save strategy.");
+            showToast("Failed to save strategy: too many strategies or internal error.");
         }
     }
 

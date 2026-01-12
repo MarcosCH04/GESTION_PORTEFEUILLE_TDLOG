@@ -72,7 +72,7 @@ function Charts({ assetPrices, portfolio }) {
   const options = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: false,
+    animation: true,
     plugins: {
       legend: { position: 'top' },
       tooltip: { mode: 'index', intersect: false }
