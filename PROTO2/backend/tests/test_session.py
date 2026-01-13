@@ -9,7 +9,6 @@ def authenticated_client(client):
     client.post(REGISTER_URL, json=USER_DATA)
     login_response = client.post(LOGIN_URL, json=USER_DATA)
     
-    # Debugging print: if this fails, we will see why
     if login_response.status_code != 200:
         print(f"Login failed: {login_response.status_code} - {login_response.text}")
         
@@ -55,7 +54,7 @@ def test_scratchpad_overwrites_and_manual_save(client, db_session: Session):
     auth_client.post("/api/backtest", json=PAYLOAD_DATA)
     
     # 2. Manually save it
-    auth_client.post("/api/strategies/save-current")
+    auth_client.post("/api/strategies/save-current", json={"name": "My Strategy"})
     
     # 3. Verify: We now have 1 'Saved' and 1 'Latest' (scratchpad)
     # Total = 2 rows
@@ -73,11 +72,11 @@ def test_strategy_manual_save_limit(client, db_session: Session):
     
     # 2. Save it 5 times
     for i in range(5):
-        res = auth_client.post("/api/strategies/save-current")
+        res = auth_client.post("/api/strategies/save-current", json={"name": f"Strategy {i}"})
         assert res.status_code == 200
         
     # 3. The 6th manual save should fail
-    res = auth_client.post("/api/strategies/save-current")
+    res = auth_client.post("/api/strategies/save-current", json={"name": "Strategy 6"})
     assert res.status_code == 400
     assert "Storage full" in res.json()["detail"]
 
