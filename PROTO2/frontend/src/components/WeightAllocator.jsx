@@ -1,7 +1,10 @@
 // frontend/src/components/WeightAllocator.jsx
 import React from "react";
 
+//Allows users to specify the percentage allocation for each selected asset.
+
 function WeightAllocator({ selected, weights, setWeights }) {
+  // ide component if no asset is selected
   if (selected.length === 0) return null;
 
   function handleWeightChange(asset, value) {
@@ -9,8 +12,8 @@ function WeightAllocator({ selected, weights, setWeights }) {
     setWeights({ ...weights, [asset]: numValue });
   }
 
-  // Calculer la somme totale
-  const totalWeight = selected.reduce((sum, asset) => sum + (weights[asset] || 0), 0);
+  //  Calculate total weight allocation
+  const totalWeight = selected.reduce((sum, asset) => sum + (weights[asset] || 0), 0); // reduce() iterates over sleected assets and sums their weights
   const isValid = Math.abs(totalWeight - 1.0) < 0.01;
 
   return (
@@ -46,7 +49,7 @@ function WeightAllocator({ selected, weights, setWeights }) {
         ))}
       </div>
 
-      {/* Indicateur de somme */}
+      {/* Validation Indicator */}
       <div className={`mt-4 p-3 rounded-lg ${
         isValid ? 'bg-green-50 border border-green-200' : 'bg-orange-50 border border-orange-200'
       }`}>

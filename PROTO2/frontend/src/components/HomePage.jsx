@@ -3,12 +3,14 @@ import React from 'react';
 
 function HomePage({ setShowLogin, setShowRegistration }) {
     return (
+        // Full-screen container with gradient background
         <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
             <div className="max-w-4xl w-full">
-                {/* Card principale */}
+                {/* Main Card */}
                 <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+                    {/* Header Section */}
                     <div className="p-12 text-center">
-                        {/* Logo/Titre */}
+                        {/* Title */}
                         <div className="mb-8">
                             <h1 className="text-5xl font-bold text-gray-900 mb-4">
                                 InvestTrack
@@ -16,14 +18,15 @@ function HomePage({ setShowLogin, setShowRegistration }) {
                             <div className="w-20 h-1 bg-primary-500 mx-auto rounded-full"></div>
                         </div>
 
-                        {/* Description */}
+                        {/* App Description */}
                         <p className="text-xl text-gray-600 mb-12 leading-relaxed max-w-2xl mx-auto">
                             Analyze asset data and simulate portfolio strategies securely.
                             Build, test, and optimize your investment strategies with powerful tools.
                         </p>
 
-                        {/* Boutons d'action */}
+                        {/* Call-to-Action Buttons */}
                         <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
+                            {/* Login Button */}
                             <button 
                                 onClick={() => setShowLogin()}
                                 className="px-8 py-4 bg-primary-500 text-white font-semibold rounded-xl 
@@ -32,6 +35,8 @@ function HomePage({ setShowLogin, setShowRegistration }) {
                             >
                                 Log In
                             </button>
+
+                            {/* Register Button */}
                             <button 
                                 onClick={() => setShowRegistration()}
                                 className="px-8 py-4 bg-white text-primary-500 font-semibold rounded-xl 
@@ -42,13 +47,13 @@ function HomePage({ setShowLogin, setShowRegistration }) {
                             </button>
                         </div>
 
-                        {/* Note */}
+                        {/* Notice Text */}
                         <p className="text-sm text-gray-500">
                             Access requires registration or logging in
                         </p>
                     </div>
 
-                    {/* Section features (optionnel) */}
+                    {/* Features Section */}
                     <div className="bg-gray-50 px-12 py-8 grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="text-center">
                             <h3 className="font-semibold text-gray-900 mb-1">Analysis</h3>

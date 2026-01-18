@@ -1,13 +1,19 @@
 // frontend/src/App.jsx
+
+/**
+ * Main application component. It manages authentication states,
+ * Navigation between pages, Data flow between components, and API interactions.
+ */
+
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-// Authentication Components
+// --- Authentication Components ---
 import LoginForm from "./components/LoginForm"; 
 import RegistrationForm from "./components/RegistrationForm";
 import HomePage from "./components/HomePage"; 
 
-// Main Application Components 
+// --- Main Application Components --- 
 import AssetSelector from "./components/AssetSelector";
 import WeightAllocator from "./components/WeightAllocator";
 import PeriodSelector from "./components/PeriodSelector";
@@ -16,10 +22,14 @@ import PortfolioTable from "./components/PortfolioTable";
 import Charts from "./components/Charts";
 import SavedStrategiesList from "./components/SavedStrategiesList";
 import Toast from "./components/Toast";
+import Spinner from "./components/Spinner";
 
+// --- API Configuration ---
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+// Ensure axios sends cookies with requests
 axios.defaults.withCredentials = true;
 
+// --- View States, defines the different screens ---
 const VIEW_STATES = {
     HOME: 'home',
     LOGIN: 'login',
@@ -27,12 +37,19 @@ const VIEW_STATES = {
     MAIN_APP: 'main_app', 
 };
 
+/**
+ * Main application component
+ */
 function App() {
-    // --- Authentication State ---
+    // --- Authentication and navigation State ---
     const [currentView, setCurrentView] = useState(VIEW_STATES.HOME); 
     const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-    // --- Asset Selection ---
+    // --- Loading States (used to show spinners) ---
+    const [loadingAssets, setLoadingAssets] = useState(false);
+    const [loadingBacktest, setLoadingBacktest] = useState(false);
+
+    // --- Asset Selection State ---
     const [assets, setAssets] = useState([]);
     const [selected, setSelected] = useState([]);
     const [weights, setWeights] = useState({});
@@ -58,10 +75,8 @@ function App() {
     const [metrics, setMetrics] = useState(null); 
     const [portfolio, setPortfolio] = useState(null); 
     
-    // --- Toast Notification ---
+    // --- UI Feedback State (toast and saved strategies) ---
     const [toast, setToast] = useState(null);
-
-    // --- Saved Strategies ---
     const [savedStrats, setSavedStrats] = useState([]);
 
     // --- Toast Helper ---
@@ -99,6 +114,8 @@ function App() {
     };
 
     // --- Refresh Strategies ---
+    // Fetch saved strategis from backend
+    // Called when user logs in or after saving a new strategy
     const refreshStrategies = async () => {
         try {
             const res = await axios.get(`${API_BASE_URL}/strategies`);
@@ -108,6 +125,7 @@ function App() {
         }
     };
 
+    // Refresh strategies when authentication state changes
     useEffect(() => {
         if (isAuthenticated) {
             refreshStrategies();
@@ -116,35 +134,49 @@ function App() {
 
     // --- Load Asset Data ---
     async function loadAssetData() {
+        // Validation : Must select at least one asset 
         if (selected.length === 0) {
             showToast("Please select at least one asset before loading data.");
             return;
         }
-
+        
+        setLoadingAssets(true); // show spinner
+        setAssetPrices(null); // clear old data  
+        setMetrics(null);
+        
         try {
+            // Prepare payload and call backend 
             const payload = {
                 assets: selected,
                 start_date: period.start,
                 end_date: period.end,
             };
+            // Send POST request to backend
             const res = await axios.post(`${API_BASE_URL}/analyze`, payload);
+            
+            // Store results in state
             setAssetPrices(res.data.prices); 
             setMetrics(res.data.metrics);
+
             showToast("Asset data loaded successfully!", "success");
         } catch (e) {
             console.error("Analyze Error:", e);
             showToast("Failed to load asset data. Please try again.");
+        } finally {
+            setLoadingAssets(false); // Hide spinner
         }
     }
 
     // --- Run Backtest ---
     async function runBacktest() {
-        // Validation
+
+        // Validation 1: at least one asset selected 
         if (selected.length === 0) {
             showToast("Please select at least one asset.");
             return;
         }
 
+        // Validation 2: Weights sum to 1.0
         const w = selected.map((s) => weights[s] || 0);
         const sumW = w.reduce((acc, x) => acc + x, 0);
         
@@ -152,8 +184,12 @@ function App() {
             showToast(`Weight allocation must sum to 100%. Current total: ${(sumW * 100).toFixed(1)}%`);
             return;
         }
-
+        
+        setLoadingBacktest(true); // show spinner 
+        setPortfolio(null); // clear old results
+        
         try {
+            // Prepare payload and call backend 
             const payload = {
                 assets: selected,
                 start_date: period.start,
@@ -165,14 +201,22 @@ function App() {
                 strat_end: strategy.stratEnd,
             };
             
+            // Send POST request to backend 
             const res = await axios.post(`${API_BASE_URL}/backtest`, payload);
+            
+            // Store simulation results in state
             setPortfolio(res.data.portfolio);
             setMetrics(res.data.metrics); 
             setAssetPrices(res.data.asset_prices);
+            
+            // Refresh strategies list (backend auto-saves "latest run")
             refreshStrategies();
+
             showToast("Backtest completed successfully!", "success");
         } catch (e) {
             console.error(e);
+
+            // Handle session expiration (401 Unauthorized)
             if (e.response && e.response.status === 401) {
                 showToast("Session expired. Please log in again.");
                 setIsAuthenticated(false);
@@ -180,41 +224,48 @@ function App() {
             } else {
                 showToast("Backtest failed. Please check your inputs.");
             }
+        } finally {
+            setLoadingBacktest(false); // hide spinner
         }
     }
 
     // --- Save Strategy ---
     async function saveStrategy() {
+        // Prompt user for name (browser native dialog)
         const input = window.prompt("Enter a name for this strategy:", "My Strategy");
-        if (input === null) return;
+        if (input === null) return; // User cancelled
 
+        // Use input or generate default name
         const finalName = input.trim() || `Strategy ${new Date().toLocaleDateString()}`;
 
         try {
             await axios.post(`${API_BASE_URL}/strategies/save-current`, { name: finalName });
             showToast("Strategy saved successfully!", "success");
-            refreshStrategies();
+            refreshStrategies(); // Refresh list to show new strategy 
         } catch (e) {
             showToast("Failed to save strategy: too many strategies or internal error.");
         }
     }
 
 
-    // --- Load Saved Strategy ---
+    // --- Load a previously Saved Strategy ---
     const loadSavedParameters = async (params) => {
-        // 1. Charger les paramètres
+        // Restore parameters from saved strategy
         setSelected(params.assets || []);
+
+        // Restore investment amount and period 
         setAmount(params.invest_amount || 10000);
         setPeriod({
             start: params.start_date || "2018-01-01",
             end: params.end_date || "2023-01-01",
         });
+
+        // Restore strategy configuration and weight allocation
         setStrategy({
             type: params.strategy || "buy_and_hold",
             stratStart: params.strat_start || "2020-01-01",
             stratEnd: params.strat_end || "2023-01-01", 
         });
-        
         const newWeights = {};
         if (params.assets && params.weights) {
             params.assets.forEach((asset, index) => {
@@ -224,9 +275,8 @@ function App() {
         setWeights(newWeights);
         showToast("Strategy parameters loaded!", "success");
         
-
-
     };
+
 
     // --- Fetch Assets on Mount ---
     useEffect(() => {
@@ -239,18 +289,23 @@ function App() {
     }, []);
 
     // --- Auto-distribute weights when assets change ---
+    // When selected assets change, distribute weights equally
     useEffect(() => {
         if (selected.length > 0) {
-            const equalWeight = 1 / selected.length;
+            const equalWeight = 1 / selected.length; // Calculate equal distribution 
             const newWeights = {};
+            
+            // Assign equal weight to each selected asset
             selected.forEach(asset => {
                 newWeights[asset] = equalWeight;
             });
             setWeights(newWeights);
         }
-    }, [selected.length]);
+    }, [selected.length]);  // Runs when selection count changes
 
     // --- MAIN APP VIEW ---
+
+    // This is only shown only when authenticated and currentView is MAIN_APP
     if (isAuthenticated && currentView === VIEW_STATES.MAIN_APP) {
         return (
             <div className="min-h-screen bg-gray-50">
@@ -263,7 +318,7 @@ function App() {
                     />
                 )}
 
-                {/* Header */}
+                {/* Header. Stays at top when scrolling and shows app title and logout button */}
                 <header className="bg-white shadow-sm sticky top-0 z-50">
                     <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
                         <h1 className="text-2xl font-bold text-gray-900">
@@ -279,7 +334,7 @@ function App() {
                     </div>
                 </header>
 
-                {/* Main Content */}
+                {/* Main Content. All components below are displayed within this main area */}
                 <main className="max-w-7xl mx-auto px-4 py-8">
                     {/* Step 1: Asset Selection */}
                     <AssetSelector
@@ -291,24 +346,33 @@ function App() {
                     {/* Step 2: Analysis Period */}
                     <PeriodSelector period={period} setPeriod={setPeriod} />
 
-                    {/* Load Asset Data Button */}
+                    {/* Load Asset Data Button. It triggers loadAssetData() function and it is disabled while loading */}
                     <div className="mb-6">
                         <button 
-                            onClick={loadAssetData}
-                            className="w-full md:w-auto px-8 py-3 bg-blue-500 text-white font-semibold rounded-lg 
-                                     hover:bg-blue-600 transition-colors shadow-md"
+                        onClick={loadAssetData}
+                        disabled={loadingAssets}
+                        className="w-full md:w-auto px-8 py-3 bg-blue-500 text-white font-semibold rounded-lg 
+                        hover:bg-blue-600 transition-colors shadow-md
+                        disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Load Asset Data
+                            {loadingAssets ? 'Loading...' : 'Load Asset Data'}
                         </button>
                     </div>
-
-                    {/* Asset Charts */}
-                    {assetPrices && (
+                    
+                    {/* Spinner while loading assets, it displays animated spinner with message */}
+                    {loadingAssets && (
+                        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+                            <Spinner message="Loading asset data, please wait..." />
+                        </div>
+                    )}
+                    
+                    {/* Asset Charts, it is only shown when not loading assets and asset prices are available*/}
+                    {!loadingAssets && assetPrices && (
                         <Charts assetPrices={assetPrices} portfolio={null} />
                     )}
-
+                    
                     {/* Metrics Table */}
-                    <PortfolioTable selectedAssets={selected} metrics={metrics} />
+                    {!loadingAssets && <PortfolioTable selectedAssets={selected} metrics={metrics} />}
                     
                     {/* Step 3: Weight Allocation */}
                     {selected.length > 0 && (
@@ -327,27 +391,37 @@ function App() {
                         setAmount={setAmount}
                     />
 
-                    {/* Run Backtest Button */}
+                    {/* Run Backtest Button, it triggers runBacktest() function and it is disabled while loading */}
                     <div className="mb-6">
                         <button 
-                            onClick={runBacktest}
-                            className="w-full md:w-auto px-8 py-3 bg-primary-500 text-white font-semibold rounded-lg 
-                                     hover:bg-primary-600 transition-colors shadow-md"
+                        onClick={runBacktest}
+                        disabled={loadingBacktest}
+                        className="w-full md:w-auto px-8 py-3 bg-primary-500 text-white font-semibold rounded-lg 
+                        hover:bg-primary-600 transition-colors shadow-md
+                        disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Run Portfolio Backtest
+                            {loadingBacktest ? 'Running Backtest...' : 'Run Portfolio Backtest'}
                         </button>
                     </div>
-
-                    {/* Portfolio Results */}
-                    {portfolio && (
+                    
+                    {/* Spinner while running backtest */}
+                    {loadingBacktest && (
+                        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+                            <Spinner message="Running backtest simulation, please wait..." />
+                        </div>
+                    )}
+                    
+                    {/* Portfolio Results, shown only when not loading backtest and portfolio data is available */}
+                    {!loadingBacktest && portfolio && (
                         <div className="space-y-6">
                             <Charts assetPrices={null} portfolio={portfolio} />
                             
+                            {/* Save Strategy Button */}
                             <div className="bg-white rounded-xl shadow-sm p-6">
                                 <button 
-                                    onClick={saveStrategy}
-                                    className="px-6 py-3 bg-green-500 text-white font-semibold rounded-lg 
-                                             hover:bg-green-600 transition-colors"
+                                onClick={saveStrategy}
+                                className="px-6 py-3 bg-green-500 text-white font-semibold rounded-lg 
+                                hover:bg-green-600 transition-colors"
                                 >
                                     Save This Strategy
                                 </button>
@@ -355,7 +429,7 @@ function App() {
                         </div>
                     )}
 
-                    {/* Saved Strategies */}
+                    {/* Step 5: Saved Strategies */}
                     <SavedStrategiesList 
                         savedStrats={savedStrats} 
                         onRefresh={refreshStrategies} 
@@ -367,13 +441,18 @@ function App() {
     }
 
     // --- AUTHENTICATION VIEWS ---
+    // If user is not authenticated, show login/register/home views
+    // We use a simple switch-case to render the appropriate component
     switch (currentView) {
         case VIEW_STATES.LOGIN:
             return (
                 <div className="min-h-screen gradient-bg flex flex-col">
+                    
+                    {/* Login form (centered) */}
                     <div className="flex-1 flex items-center justify-center p-4">
                         <LoginForm onSuccessfulLogin={handleLoginSuccess} />
                     </div>
+                    
                     <div className="pb-8 text-center">
                         <p className="text-white mb-2">
                             Need an account?{' '}
@@ -397,9 +476,11 @@ function App() {
         case VIEW_STATES.REGISTER:
             return (
                 <div className="min-h-screen gradient-bg flex flex-col">
+                    {/* Registration Form (centered) */}
                     <div className="flex-1 flex items-center justify-center p-4">
                         <RegistrationForm onSuccessfulRegister={handleRegisterSuccess} />
                     </div>
+                    
                     <div className="pb-8 text-center">
                         <p className="text-white mb-2">
                             Already registered?{' '}

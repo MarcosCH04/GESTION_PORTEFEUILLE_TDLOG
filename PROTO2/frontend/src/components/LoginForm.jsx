@@ -3,16 +3,22 @@ import React, { useState } from 'react';
 import { authRequest } from '../api';
 
 function LoginForm({ onSuccessfulLogin }) {
+    // Form input states and UI feedback states
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
+    /* Handle form submission, validate inputs
+     * Call authRequest() to authenticate, on success notify parent component
+     * On error, display error message
+     */
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
 
+        // Validation: Check if fields are filled
         if (!username || !password) {
             setError("Please enter your username and password.");
             setLoading(false);
@@ -20,12 +26,16 @@ function LoginForm({ onSuccessfulLogin }) {
         }
 
         try {
+            // Send login request to backend
             await authRequest('login', { username, password });
             onSuccessfulLogin(true);
         } catch (err) {
+
+            // Display error from backend or fallback message
             console.error('Login error:', err);
             setError(err.message || 'Invalid username or password.');
         } finally {
+            // Always stop loading spinner (success or error)
             setLoading(false);
         }
     };
@@ -33,14 +43,16 @@ function LoginForm({ onSuccessfulLogin }) {
     return (
         <div className="max-w-md w-full">
             <div className="bg-white rounded-2xl shadow-2xl p-8">
-                {/* Header */}
+                {/* Form Header */}
                 <div className="text-center mb-8">
                     <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h2>
                     <p className="text-gray-600">Log in to your account</p>
                 </div>
 
-                {/* Form */}
+                {/* Login Form */}
                 <form onSubmit={handleSubmit} className="space-y-6">
+                    
+                    {/* Username Input */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Username
@@ -57,6 +69,7 @@ function LoginForm({ onSuccessfulLogin }) {
                         />
                     </div>
 
+                    {/* Password Input */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Password
@@ -73,12 +86,14 @@ function LoginForm({ onSuccessfulLogin }) {
                         />
                     </div>
 
+                    {/* Error Message Display */}
                     {error && (
                         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
                             {error}
                         </div>
                     )}
 
+                    {/* Submit Button */}
                     <button
                         type="submit"
                         disabled={loading}

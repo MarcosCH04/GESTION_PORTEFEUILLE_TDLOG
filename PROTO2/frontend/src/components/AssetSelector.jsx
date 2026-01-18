@@ -1,15 +1,16 @@
-
-// Chemin d'accès:
 // frontend/src/components/AssetSelector.jsx
 
 import React from "react";
 
+//Allows users to select multiple assets for portfolio analysis.
+
 function AssetSelector({ assets, selected, setSelected }) {
+  // Toggle asset selection
+  // If asset is already selected, it is removeed otherwise it is added
   function toggle(asset) {
     if (selected.includes(asset)) {
       setSelected(selected.filter((s) => s !== asset));
     } else {
-      // On ajoute l'actif
       setSelected([...selected, asset]);
     }
   }
