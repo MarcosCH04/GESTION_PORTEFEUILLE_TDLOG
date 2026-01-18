@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  /* Content paths tell Tailwind which files to scan for class names */
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",

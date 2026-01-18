@@ -1,8 +1,3 @@
-// Choix de stratégie (DCA ou buy and hold) + période d’investissement.
-
-// Chemin d'accès:
-// frontend/src/components/StrategyForm.jsx
-
 // frontend/src/components/StrategyForm.jsx
 import React from "react";
 
@@ -21,7 +16,7 @@ function StrategyForm({ strategy, setStrategy, amount, setAmount }) {
         Configure your investment amount and strategy parameters
       </p>
       
-      {/* Montant */}
+      {/* Investment Amount */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Total Investment Amount ($)
@@ -37,7 +32,7 @@ function StrategyForm({ strategy, setStrategy, amount, setAmount }) {
         />
       </div>
 
-      {/* Type de stratégie */}
+      {/* Strategy Type */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Strategy Type
@@ -55,7 +50,7 @@ function StrategyForm({ strategy, setStrategy, amount, setAmount }) {
         </select>
       </div>
 
-      {/* Dates de stratégie */}
+      {/* Strategy Period */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">

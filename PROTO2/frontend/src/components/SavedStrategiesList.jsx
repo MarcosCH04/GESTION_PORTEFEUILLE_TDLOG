@@ -1,26 +1,33 @@
+// frontend/src/components/SavedStrategiesList.jsx
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
+//API base URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
 function SavedStrategiesList({ savedStrats = [], onRefresh, onLoadStrategy }) {
+  // Loading state while fetching strategies
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(false);
   }, [savedStrats]);
 
+  // Handle strategy deletion with confirmation
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Delete strategy "${name}"?`)) return;
 
     try {
+      // Send DELETE request to backend to remove strategy
       await axios.delete(`${API_BASE_URL}/strategies/${id}`);
       onRefresh();
     } catch (err) {
+      // Show error if deletion fails 
       alert("Failed to delete strategy");
     }
   };
 
+  // Show loading state while fetching strategies
   if (loading) {
     return (
       <div className="bg-white rounded-xl shadow-sm p-6">

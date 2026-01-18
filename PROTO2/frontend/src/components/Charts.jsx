@@ -1,3 +1,7 @@
+// frontend/src/components/Charts.jsx
+
+//Displays two types of charts using Chart.js : Asset price charts and portfolio performance chart
+
 import React, { useMemo } from "react";
 import { Line } from "react-chartjs-2";
 import {
@@ -19,7 +23,7 @@ const CHART_COLORS = [
 ];
 
 function Charts({ assetPrices, portfolio }) {
-  // If no data at all, show the friendly placeholder
+  // If no data at all, show placeholder
   if (!assetPrices && !portfolio) {
     return (
       <div className="section chart-container p-12 text-center border-2 border-dashed border-gray-200 rounded-lg">
@@ -60,8 +64,8 @@ function Charts({ assetPrices, portfolio }) {
         label: "Valeur du portefeuille",
         data: dates.map(d => portfolio[d]),
         fill: true,
-        backgroundColor: "rgba(34, 197, 94, 0.2)", // Light Green Fill
-        borderColor: "rgb(34, 197, 94)",           // Solid Green Line
+        backgroundColor: "rgba(34, 197, 94, 0.2)", 
+        borderColor: "rgb(34, 197, 94)",           
         tension: 0.2,
         pointRadius: 0,
         spanGaps: true,

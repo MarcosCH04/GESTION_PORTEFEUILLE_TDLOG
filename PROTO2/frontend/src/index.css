@@ -1,30 +1,34 @@
-/* frontend/src/index.css */
+/* frontend/src/index.css
+Global styles and Tailwind Configuration
+It contains Tailwind CSS imports, CSS custom properties, and global styles applied to all pages 
+ */
 
+ /* Import Tailwind CSS layers */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Variables globales */
+/* Custom CSS variables */
 :root {
   --primary: #667eea;
   --primary-dark: #5568d3;
 }
 
-/* Reset et styles de base */
+/* Base styles */
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+
   background: #f8fafc;
 }
 
-/* Styles personnalisés */
+/* -- Custom classes -- */
+/* Gradient background for authentification pages */
 .gradient-bg {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
-/* Messages de notification */
+/* Toast notification positioning */
 .toast {
   position: fixed;
   top: 20px;
@@ -33,6 +37,7 @@ body {
   animation: slideIn 0.3s ease-out;
 }
 
+/* Slide-in animation for toast notifications */
 @keyframes slideIn {
   from {
     transform: translateX(400px);

@@ -1,11 +1,9 @@
-// Période de backtest des actifs (pour les courbes et les métriques).
-
-// Chemin d'accès: 
 // frontend/src/components/PeriodSelector.jsx
 
 import React from "react";
 
 function PeriodSelector({ period, setPeriod }) {
+  // Handle input changes for start and end dates
   function handleChange(e) {
     const { name, value } = e.target;
     setPeriod({

@@ -1,11 +1,14 @@
 // frontend/src/components/Toast.jsx
+
+/* Displays temporary success/error messages that appear in the top-right corner */
 import React, { useEffect } from 'react';
 
 function Toast({ message, type = 'error', onClose }) {
+    // Auto-dismiss the toast after 5 seconds 
     useEffect(() => {
         const timer = setTimeout(() => {
             onClose();
-        }, 5000); // Disparaît après 5 secondes
+        }, 5000); 
 
         return () => clearTimeout(timer);
     }, [onClose]);

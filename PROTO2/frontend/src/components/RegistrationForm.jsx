@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { authRequest } from '../api';
 
 function RegistrationForm({ onSuccessfulRegister }) {
+    // Form input states and UI feedback states
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -10,24 +11,28 @@ function RegistrationForm({ onSuccessfulRegister }) {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
+    // Handle form submission wit validation and API call
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setMessage('');
         setLoading(true);
 
+        // Validation 1: Check all fields are filled
         if (!username || !password || !confirmPassword) {
             setError("Please fill in all fields.");
             setLoading(false);
             return;
         }
 
+        // Validation 2: Passwords must match
         if (password !== confirmPassword) {
             setError("Passwords do not match.");
             setLoading(false);
             return;
         }
 
+        // Validation 3: Minimum password length
         if (password.length < 6) {
             setError("Password must be at least 6 characters long.");
             setLoading(false);
@@ -35,10 +40,13 @@ function RegistrationForm({ onSuccessfulRegister }) {
         }
 
         try {
+            // Sending registration request to backend
             await authRequest('register', { username, password });
+            //Success: Show message and redirect to login
             setMessage('Registration successful! Redirecting...');
             setTimeout(() => onSuccessfulRegister(), 1500);
         } catch (err) {
+            // Display error from backend or fallback message
             setError(err.message || 'Registration failed.');
         } finally {
             setLoading(false);

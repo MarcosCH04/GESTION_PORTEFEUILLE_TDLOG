@@ -1,5 +1,16 @@
-// Configuration for API calls
+/**
+ * api.js - Authentication API Handler
+ * 
+ * This module handles HTTP requests to the backend for user authentication.
+ * It manages login and registration by communicating with FastAPI endpoints.
+ */
+import axios from 'axios';
+
+// Backend API base URL (connects to FastAPI server)
 const API_BASE_URL = 'http://localhost:8000/api';
+
+// Configure axios to always send cookies with requests
+axios.defaults.withCredentials = true;
 
 /**
  * Executes a POST request for authentication (register or login).
@@ -8,26 +19,15 @@ const API_BASE_URL = 'http://localhost:8000/api';
  * @returns {Promise<object>} The JSON response data
  */
 export async function authRequest(endpoint, credentials) {
-    const url = `${API_BASE_URL}/${endpoint}`;
-    
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        // IMPORTANT: We must include credentials to allow the browser 
-        // to send and receive the HTTP-only session cookie.
-        credentials: 'include', 
-        body: JSON.stringify(credentials),
-    });
-
-    if (!response.ok) {
-        // Parse the error message from the backend (e.g., "Username already registered")
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Authentication failed.');
+    try {
+        const response = await axios.post(`${API_BASE_URL}/${endpoint}`, credentials);
+        
+        // The login request sets the cookie, which is all we need.
+        // The register request returns UserInDB data.
+        return response.data;
+        
+    } catch (error) {
+        // Handle HTTP errors
+        throw new Error(error.response?.data?.detail || 'Authentication failed.');
     }
-
-    // The login request sets the cookie, which is all we need.
-    // The register request returns UserInDB data.
-    return response.json();
 }
