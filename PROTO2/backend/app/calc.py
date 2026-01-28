@@ -246,10 +246,10 @@ def run_backtest(req: BacktestRequest):
     # Some basic validations.
     TOLERANCE = 1e-6 # Point-float tolerance for weight sum check.
     if not np.isclose(sum(req.weights), 1.0, atol=TOLERANCE):
-        raise ValueError("La somme des poids doit être égale à 1.")
+        raise ValueError("Weight sum must be 1.")
  
     if len(req.assets) != len(req.weights):
-        raise ValueError("Le nombre d'actifs ne correspond pas au nombre de poids.")
+        raise ValueError("Number of assets does not match number of weights.")
     
 
     # 1. Fetch price data for metrics calculation
@@ -259,7 +259,7 @@ def run_backtest(req: BacktestRequest):
         end_date=str(req.end_date),
     )
     if prices.empty:
-        raise ValueError("Pas de données de prix pour les actifs demandés.")
+        raise ValueError("No price data for the requested assets.")
     
     # If the calculation requires at least two data points (start and end), check for that.
     if prices.empty or len(prices) < 2:

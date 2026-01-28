@@ -27,7 +27,7 @@ function Charts({ assetPrices, portfolio }) {
   if (!assetPrices && !portfolio) {
     return (
       <div className="section chart-container p-12 text-center border-2 border-dashed border-gray-200 rounded-lg">
-        <p className="text-gray-500 italic">Sélectionnez des actifs et lancez l'analyse pour visualiser les courbes.</p>
+        <p className="text-gray-500 italic">Select assets and launch analysis to visualize the curves.</p>
       </div>
     );
   }
@@ -61,7 +61,7 @@ function Charts({ assetPrices, portfolio }) {
     return {
       labels: dates,
       datasets: [{
-        label: "Valeur du portefeuille",
+        label: "Portfolio Value",
         data: dates.map(d => portfolio[d]),
         fill: true,
         backgroundColor: "rgba(34, 197, 94, 0.2)", 
@@ -100,7 +100,7 @@ function Charts({ assetPrices, portfolio }) {
     <div className="section chart-container space-y-12 my-8">
       {assetData && (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold mb-4 text-gray-800">Évolution des prix des actifs</h3>
+          <h3 className="text-lg font-semibold mb-4 text-gray-800">Asset Price Evolution</h3>
           <div style={{ height: '350px' }}>
             <Line data={assetData} options={options} />
           </div>
@@ -109,7 +109,7 @@ function Charts({ assetPrices, portfolio }) {
 
       {portfolioData && (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold mb-4 text-gray-800">Performance du portefeuille (Valeur totale)</h3>
+          <h3 className="text-lg font-semibold mb-4 text-gray-800">Portfolio Performance (Total Value)</h3>
           <div style={{ height: '350px' }}>
             <Line data={portfolioData} options={options} />
           </div>

@@ -18,7 +18,7 @@ The project is split into two main services managed via Docker:
 * **Location:** `/frontend`
 * **Key Features:**
     * **Authentication:** Uses HTTP-only session cookies via Axios (`withCredentials: true`) to ensure security.
-    * **Strategy Management:** Users can run backtests, which creates a "Dernière stratégie" entry. These can be promoted to "Saved" status.
+    * **Strategy Management:** Users can run backtests, which creates a "Latest Unsaved Strategy" entry. These can be promoted to "Saved" status.
     * **State Management:** Explicitly resets all local variables on logout to prevent data leaking between user sessions in the same browser.
 
 
