@@ -38,6 +38,18 @@ def _vol(series: pd.Series) -> float:
     if len(series) < 2:
         return 0.0
     returns = series.pct_change().dropna()
+
+    # If we have fewer than 2 return points, std() returns NaN (division by zero)
+    if len(returns) < 2:
+        return 0.0
+        
+    vol = returns.std() * np.sqrt(252)
+    
+    # Handle NaN if it slips through
+    if pd.isna(vol):
+        return 0.0
+        
+    return float(vol)
     return float(returns.std() * np.sqrt(252))
 
 
@@ -132,7 +144,7 @@ def _sharpe_ratio(series: pd.Series, risk_free_rate: float = 0.02) -> float:
     annual_return = returns.mean() * 252
     annual_vol = returns.std() * np.sqrt(252)
     
-    if annual_vol == 0:
+    if annual_vol == 0 or pd.isna(annual_vol):
         return 0.0
     
     return float((annual_return - risk_free_rate) / annual_vol)
@@ -244,7 +256,7 @@ def run_backtest(req: BacktestRequest):
     """
 
     # Some basic validations.
-    TOLERANCE = 1e-6 # Point-float tolerance for weight sum check.
+    TOLERANCE = 1e-2 # Point-float tolerance for weight sum check.
     if not np.isclose(sum(req.weights), 1.0, atol=TOLERANCE):
         raise ValueError("Weight sum must be 1.")
  

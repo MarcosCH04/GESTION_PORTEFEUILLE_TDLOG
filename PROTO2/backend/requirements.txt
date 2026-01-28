@@ -9,3 +9,4 @@ passlib
 argon2-cffi[with-bindings]
 pytest
 httpx
+hypothesis

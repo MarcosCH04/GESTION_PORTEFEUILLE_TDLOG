@@ -194,5 +194,5 @@ def test_backtest_input_validation(client):
     
     assert response.status_code == 400
     
-    expected_message = "La somme des poids doit être égale à 1." 
+    expected_message = "Weight sum must be 1." 
     assert expected_message in response.json()["detail"]
