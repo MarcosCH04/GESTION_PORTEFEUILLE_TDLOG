@@ -1,128 +1,155 @@
-# Investment Backtester Prototype
+# InvestTrack - Investment Backtester
 
-A full-stack application for analyzing asset performance and simulating investment strategies (Buy & Hold, DCA) with persistent user sessions.
+A full-stack quantitative finance application with academic purposes for analyzing asset performance and simulating investment strategies (Buy & Hold, DCA). 
 
-## Project Architecture
+## Project Overview
 
-The project is split into two main services managed via Docker:
+This project implements a robust financial backtesting engine featuring a clear separation of concerns between data retrieval, calculation logic, and user interface. It is designed to handle historical market data efficiently using a "Gap Analysis" caching strategy and validates financial inputs using strict property-based testing.
+
+### Key Technical Features
+
+* **Gap Analysis Caching:** The system minimizes API calls to external providers (Yahoo Finance) by checking the local SQLite database first. It fetches only the specific dates missing from the requested range to optimize performance and reduce latency (`backend/app/data_fetcher.py`).
+* **Session-Based Authentication:** Custom-built session management utilizing HTTP-only cookies and cryptographic hashing (Argon2), eliminating reliance on heavy third-party authentication services (`backend/app/auth.py`).
+* **Property-Based Testing:** Utilizes the **Hypothesis** library to fuzz-test the financial engine against thousands of random scenarios, ensuring mathematical stability and handling of edge cases like zero-volatility assets (`backend/tests/test_random_calc.py`).
+* **Strict Schema Validation:** Pydantic schemas enforce data integrity at the API boundary, ensuring invalid inputs (e.g., mismatched arrays or improper weight sums) are rejected before reaching the calculation engine.
+
+---
+
+## Architecture
+
+The application follows a containerized microservices pattern managed via Docker.
 
 ### 1. Backend (FastAPI + SQLAlchemy)
-* **Location:** `/backend`
-* **Core Logic:**
-    * `app/calc.py`: The financial engine. It calculates metrics like CAGR, Volatility, Max Drawdown, and Sharpe Ratio.
-    * `app/api.py`: REST API handling public data (assets) and protected user actions (backtests, strategy saving).
-    * `app/db.py`: Database schema utilizing SQLite. It stores daily price caches, user credentials, and strategy parameters.
-    * `app/data_fetcher.py`: Manages historical data retrieval and local caching to minimize API hits.
+
+* **API Layer (`api.py`):** Manages REST endpoints, handles dependency injection for database sessions, and executes Pydantic validation.
+* **Financial Engine (`calc.py`):** Contains pure Python logic for computing CAGR, Volatility, Sharpe Ratio, and running Portfolio simulations.
+* **Persistence (`db.py`):** SQLite database storing:
+    * `DailyPrice`: Normalized historical time-series data.
+    * `UserStrategy`: User-saved simulation parameters (JSON).
+    * `Session`: Active user tokens and authentication state.
 
 ### 2. Frontend (React + Vite)
-* **Location:** `/frontend`
-* **Key Features:**
-    * **Authentication:** Uses HTTP-only session cookies via Axios (`withCredentials: true`) to ensure security.
-    * **Strategy Management:** Users can run backtests, which creates a "Latest Unsaved Strategy" entry. These can be promoted to "Saved" status.
-    * **State Management:** Explicitly resets all local variables on logout to prevent data leaking between user sessions in the same browser.
 
-
+* **Orchestration (`App.jsx`):** Manages the global application state, handling the flow from Authentication to Asset Selection, Analysis, and finally Results.
+* **Visualization:** Integrates `chart.js` for rendering interactive Asset Curves and Portfolio Growth charts.
+* **Performance:** Implements React `useMemo` hooks to prevent unnecessary chart re-calculations during state updates.
 
 ---
 
-## Key Workflows
+## Quick Start
 
-### Investment Strategies
-The system currently supports two economic methods in `calc.py`:
-* **Buy and Hold:** A single investment made at the start of the simulation period.
-* **DCA (Dollar-Cost Averaging):** Fixed monthly contributions throughout the simulation period.
+**Prerequisites:** Docker and Docker Compose.
 
-### Data Persistence
-1.  **Backtest:** When a user runs a simulation, parameters are saved in the `user_strategy` table with `is_saved = False` and the name "Dernière stratégie".
-2.  **Save:** Users can "save" the current run, which creates a permanent record (`is_saved = True`) and prompts for a custom name.
-3.  **Loading:** Saved strategies can be reloaded into the UI, which re-populates all inputs (assets, weights, dates) for a new run.
+1.  **Build and Launch:**
+    Run the following command from the root directory to build the containers:
+    ```bash
+    docker-compose up --build
+    ```
 
----
+2.  **Access the Application:**
+    * **Frontend Interface:** http://localhost:5173
+    * **Backend Documentation (Swagger UI):** http://localhost:8000/docs
 
-## Security & Constraints
-* **Session-Based:** Authentication is handled by the backend `Session` model; sessions are deleted upon logout.
-* **Ownership:** The API enforces that users can only fetch, or delete strategies where `user_id` matches their own session.
-* **Quota:** Each user is limited to **5 saved strategies** (enforced in `api.py`).
-
----
-
-## Setup & Development
-* **Docker:** Run `docker-compose up --build` from the root directory to launch the environment.
-* **Database:** The SQLite database is persisted in `/backend/data/app.db`.
-
-# Technical API & Schema Specification
-
-This document serves as the "Source of Truth" for the Investment Backtester's data structures and communication protocols.
+3.  **Run the Test Suite:**
+    This project includes Unit, Integration, and Property-based tests.
+    ```bash
+    docker-compose run backend pytest
+    ```
 
 ---
 
-## 1. Core Data Schemas (Models)
-These schemas define the Pydantic models used for API validation and the JSON structure stored in the database.
+## Project Structure
 
-### **Financial Metrics (`Metrics`)**
-Computed in `calc.py` and returned in analysis and backtest responses.
-- **cagr**: Compound Annual Growth Rate (float).
-- **vol**: Annualized Volatility (float).
-- **max_drawdown**: Maximum peak-to-trough loss (float).
-- **sharpe_ratio**: Risk-adjusted return relative to risk-free rate (float).
-- **best_year / worst_year**: Highest and lowest annual returns (float).
+## Project Structure
 
-### **Strategy Parameters (`BacktestRequest`)**
-The "Recipe" for a simulation, stored in the `parameters` JSON column of the `user_strategy` table.
-- **assets**: List of ticker strings (e.g., `["AAPL", "SPY"]`).
-- **start_date / end_date**: Date range for historical metrics calculation.
-- **invest_amount**: Initial or monthly investment amount (float).
-- **weights**: List of floats representing allocation (must sum to 1.0).
-- **strategy**: Either `"buy_and_hold"` or `"dca"`.
-- **strat_start / strat_end**: Date range for the portfolio simulation.
+```text
+├── docker-compose.yml           # Orchestration for Backend + Frontend
+├── backend
+│   ├── Dockerfile               # Python Environment Definition
+│   ├── requirements.txt         # Python Dependencies (FastAPI, Pandas, Hypothesis)
+│   ├── app
+│   │   ├── main.py              # App Entry Point & CORS Config
+│   │   ├── api.py               # REST API Routes
+│   │   ├── auth.py              # Session Management & Argon2 Security
+│   │   ├── calc.py              # Financial Engine (CAGR, Volatility, Simulation)
+│   │   ├── data_fetcher.py      # Yahoo Finance Integration & Gap Analysis
+│   │   ├── db.py                # SQLite Models (User, Session, Strategy)
+│   │   ├── schemas.py           # Pydantic Validation Models
+│   │   └── assets.json          # Supported Asset List
+│   ├── data
+│   │   └── app.db               # SQLite DB
+│   └── tests
+│       ├── conftest.py          # Pytest Fixtures (In-Memory DB)
+│       ├── test_api.py          # Integration Tests
+│       ├── test_calc.py         # Property-Based Math Tests (Hypothesis)
+│       ├── test_data.py         # Caching Logic Tests
+│       └── test_session.py      # Auth & Persistence Tests
+└── frontend
+    ├── Dockerfile               # Node.js Environment Definition
+    ├── package.json             # JS Dependencies (React, Chart.js, Tailwind)
+    ├── vite.config.js           # Build Configuration
+    ├── tailwind.config.js       # CSS Styling Configuration
+    ├── index.html               # App Entry Point
+    └── src
+        ├── main.jsx             # React DOM Mounting
+        ├── App.jsx              # Main Router & State Orchestrator
+        ├── api.js               # Axios Wrapper (Cookies/Auth)
+        ├── index.css            # Global Styles
+        └── components
+            ├── HomePage.jsx             # Landing Page
+            ├── LoginForm.jsx            # Authentication UI
+            ├── RegistrationForm.jsx     # User Onboarding
+            ├── AssetSelector.jsx        # Multi-select Asset Grid
+            ├── PeriodSelector.jsx       # Date Range Inputs
+            ├── WeightAllocator.jsx      # Dynamic Percentage Inputs
+            ├── StrategyForm.jsx         # Investment Parameters
+            ├── Spinner.jsx              # Loading State UI
+            ├── Charts.jsx               # Chart.js Visualizations
+            ├── PortfolioTable.jsx       # Metrics Display
+            ├── SavedStrategiesList.jsx  # Database Persistence UI
+            └── Toast.jsx                # Notification System
+```
+
+
+## Testing Strategy
+
+The project employs a comprehensive testing suite ensuring stability across the database, API, and math engine for a clear TDD approach.
+
+1.  **Property-Based Math Tests (`test_calc.py`):**
+    * **Tool:** Hypothesis
+    * **Objective:** Fuzz-tests the financial engine with thousands of random inputs (e.g., zero prices, infinite lists) to prove the calculator never crashes.
+    * *Coverage:* Volatility, CAGR, Drawdown, and weight validation logic.
+
+2.  **API Integration Tests (`test_api.py`):**
+    * **Objective:** Verifies the full request/response cycle for public and protected endpoints.
+    * *Coverage:* User registration, login flows, and payload validation (422/400 errors).
+
+3.  **Data Caching Tests (`test_data.py`):**
+    * **Objective:** Validates the "Gap Analysis" engine.
+    * *Coverage:* Ensures the system detects missing dates in the SQLite cache and only fetches the delta from Yahoo Finance.
+
+4.  **Session & Security Tests (`test_session.py`):**
+    * **Objective:** Verifies authentication persistence and isolation.
+    * *Coverage:* Cookie handling, session expiration, and ensuring users cannot delete strategies owned by others.
 
 ---
 
-## 2. Public API Endpoints
-*Accessible without an active session.*
+## API Reference
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| **GET** | `/api/assets` | Returns available tickers from `assets.json`. |
-| **POST** | `/api/register` | Creates a new user in the database. |
-| **POST** | `/api/login` | Authenticates user and sets the `session_token` cookie. |
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/api/assets` | List all available supported assets. | No |
+| **POST** | `/api/register` | Register a new user account. | No |
+| **POST** | `/api/login` | Authenticate and set the HttpOnly session cookie. | No |
+| **POST** | `/api/logout` | Invalidate session and clear cookies. | Yes |
+| **POST** | `/api/analyze` | Fetch historical metrics (CAGR, Vol) for specific assets. | Yes |
+| **POST** | `/api/backtest` | Run a portfolio simulation and store as "Latest Draft". | Yes |
+| **GET** | `/api/strategies` | Retrieve all saved strategies for the current user. | Yes |
+| **POST** | `/api/strategies/save-current` | Persist the latest backtest draft as a named strategy. | Yes |
+| **DELETE** | `/api/strategies/{id}` | Permanently remove a saved strategy. | Yes |
 
----
-
-## 3. Protected API Endpoints
-*Requires a valid `session_token` cookie. All data is scoped to the `current_user`.*
-
-### **POST** `/api/analyze` (Newly Protected)
-**Purpose:** Fetch historical data and performance metrics for specific assets.
-- **Request:** `AnalyzeRequest` (assets, start_date, end_date).
-- **Response:** - `prices`: `{ "YYYY-MM-DD": { "TICKER": price } }`
-  - `metrics`: `{ "TICKER": MetricsObject }`
-
-### **POST** `/api/backtest`
-**Purpose:** Run a simulation and record it as the user's latest "draft" (unsaved) run.
-- **Response:** Includes `portfolio` time-series data and calculated metrics.
-
-### **POST** `/api/strategies/save-current`
-**Purpose:** Persist the most recent backtest with a custom name.
-- **Request:** `{ "name": "string" }`
-- **Constraint:** Limited to 5 saved strategies per user.
-
-### **GET** `/api/strategies`
-**Purpose:** Fetch all strategies (saved and unsaved) belonging to the session user.
-
-### **DELETE** `/api/strategies/{id}`
-**Purpose:** Remove a saved strategy. Ownership is verified before deletion.
-
-### **POST** `/api/logout`
-**Purpose:** Destroys the session in the DB and clears the browser cookie.
-
----
-
-## 4. Error Reference Table
-
-| Status Code | Meaning | Typical Cause |
-| :--- | :--- | :--- |
-| **400** | Bad Request | Logic error (e.g., weights don't sum to 1). |
-| **401** | Unauthorized | Session cookie missing or expired. |
-| **422** | Unprocessable Entity | Missing required JSON field or wrong data type. |
-| **404** | Not Found | Attempting to access a strategy that does not exist. |
+### Error Handling Standards
+* **422 Unprocessable Entity:** Returned when inputs violate schema rules (e.g., missing a required JSON field in a request).
+* **401 Unauthorized:** Returned when a session cookie is missing or expired.
+* **400 Bad Request:** Returned for logic errors (e.g., "Username already taken" or "Strategy quota exceeded").
+* **404 Not Found:** Returned when trying to delete or access a resource that doesn't exist.
