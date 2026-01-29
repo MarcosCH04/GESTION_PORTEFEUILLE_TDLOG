@@ -60,8 +60,6 @@ The application follows a containerized microservices pattern managed via Docker
 
 ## Project Structure
 
-## Project Structure
-
 ```text
 ├── docker-compose.yml           # Orchestration for Backend + Frontend
 ├── backend
