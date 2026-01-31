@@ -38,12 +38,12 @@ The application follows a containerized microservices pattern managed via Docker
 
 ## Quick Start
 
-**Prerequisites:** Docker and Docker Compose.
+**Prerequisite:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) must be installed and executed before running the code.
 
 1.  **Build and Launch:**
     Run the following command from the root directory to build the containers:
     ```bash
-    docker-compose up --build
+    docker compose up --build
     ```
 
 2.  **Access the Application:**
@@ -51,9 +51,9 @@ The application follows a containerized microservices pattern managed via Docker
     * **Backend Documentation (Swagger UI):** http://localhost:8000/docs
 
 3.  **Run the Test Suite:**
-    This project includes Unit, Integration, and Property-based tests.
+    This project includes Unit, Integration, and Property-based tests with ```pytest```, cleaning right after with the ```-rm``` flag.
     ```bash
-    docker-compose run backend pytest
+    docker compose run --rm backend python -m pytest
     ```
 
 ---
