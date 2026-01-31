@@ -1,0 +1,7 @@
+# Files and directories to ignore in Docker builds
+node_modules/
+dist/
+
+# Docker files
+.dockerignore
+Dockerfile
