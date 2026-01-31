@@ -51,7 +51,7 @@ The application follows a containerized microservices pattern managed via Docker
     * **Backend Documentation (Swagger UI):** http://localhost:8000/docs
 
 3.  **Run the Test Suite:**
-    This project includes Unit, Integration, and Property-based tests with ```pytest```, cleaning right after with the ```-rm``` flag.
+    This project includes Unit, Integration, and Property-based tests with ```pytest```, cleaning right after with the ```--rm``` flag.
     ```bash
     docker compose run --rm backend python -m pytest
     ```
